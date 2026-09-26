@@ -18,7 +18,7 @@ One gateway, one API key, any model: an OpenAI-compatible endpoint that routes t
 
 <div align="center">
 
-<img src="images/9router.png" alt="9Router dashboard" width="100%" />
+<img src="images/9router-kyyoa.png" alt="9Router Kyyoa dashboard" width="100%" />
 
 </div>
 

@@ -15,16 +15,10 @@ function timeAgo(iso) {
 }
 
 function statusBadge(r) {
-  if (r.aheadBy === null && !r.status) {
+  if (r.lookupFail) {
     return <span className="text-xs px-2 py-0.5 rounded bg-black/5 dark:bg-white/5 text-text-muted">unknown</span>;
   }
-  if (r.status === "identical" || r.aheadBy === 0) {
-    return <span className="text-xs px-2 py-0.5 rounded bg-green-500/10 text-green-500">up to date</span>;
-  }
-  if (r.status === "diverged") {
-    return <span className="text-xs px-2 py-0.5 rounded bg-amber-500/10 text-amber-500">diverged · +{r.aheadBy}</span>;
-  }
-  return <span className="text-xs px-2 py-0.5 rounded bg-primary/10 text-primary font-medium">+{r.aheadBy} ahead</span>;
+  return <span className="text-xs px-2 py-0.5 rounded bg-primary/10 text-primary font-medium">tracking</span>;
 }
 
 export default function UpstreamWatchClient() {
@@ -83,13 +77,35 @@ export default function UpstreamWatchClient() {
                   {r.headShort}{r.date && <> · {timeAgo(r.date)}</>}
                 </p>
               </div>
-              <div className="flex flex-wrap gap-2">
+              {(r.recent || []).length > 0 && (
+                <div className="flex flex-col gap-1">
+                  {(r.recent || []).slice(0, 5).map((c) => (
+                    <a
+                      key={c.sha}
+                      href={`https://github.com/${r.repo}/commit/${c.sha}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                    >
+                      <code className="font-mono text-[11px] text-primary shrink-0">{c.short}</code>
+                      <span className="text-xs text-text-muted truncate flex-1">{c.message}</span>
+                      <span className="text-[11px] text-text-muted/70 shrink-0">{timeAgo(c.date)}</span>
+                    </a>
+                  ))}
+                </div>
+              )}
+              <div className="flex flex-wrap items-center gap-2">
                 <a href={r.compareUrl} target="_blank" rel="noreferrer">
                   <Button size="sm" variant="secondary" icon="difference">
-                    Lihat diff{r.aheadBy ? ` (+${r.aheadBy})` : ""}
+                    Bandingkan dgn fork
                   </Button>
                 </a>
-                <span className="text-[11px] text-text-muted self-center">
+                <a href={r.commitsUrl} target="_blank" rel="noreferrer" className="text-[11px] text-text-muted hover:text-text-main transition-colors">
+                  commit list →
+                </a>
+              </div>
+              <div>
+                <span className="text-[11px] text-text-muted">
                   Apply via CLI (nomor 3): <code className="font-mono">9router-kyyoa-update --from {r.id}</code>
                 </span>
               </div>

@@ -150,11 +150,18 @@ async function fetchUpstreamHead(repo, branch) {
   };
 }
 
-async function fetchAheadCount(baseSha, repo, branch) {
-  if (!baseSha) return null;
-  const data = await githubJson(`/repos/${repo}/compare/${baseSha}...${branch}?per_page=1`);
-  if (!data || !["behind", "ahead", "diverged", "identical"].includes(data.status)) return null;
-  return { status: data.status, aheadBy: Number(data.ahead_by) || 0 };
+// Recent commits per upstream (for the pick list). No compare API: our squashed
+// HEAD shares no history with upstreams, so compare/{localSha}...{branch} 404s.
+// Showing their latest commits + linking their commit list is history-independent.
+async function fetchRecentCommits(repo, branch, n = 5) {
+  const data = await githubJson(`/repos/${repo}/commits?sha=${branch}&per_page=${n}`);
+  if (!Array.isArray(data)) return null;
+  return data.filter((c) => c?.sha).map((c) => ({
+    sha: c.sha,
+    short: c.sha.slice(0, 7),
+    message: String(c?.commit?.message || "").split("\n")[0],
+    date: c?.commit?.committer?.date || c?.commit?.author?.date || "",
+  }));
 }
 
 export async function getUpstreamWatch() {
@@ -166,9 +173,11 @@ export async function getUpstreamWatch() {
   const remotes = [];
   let anyFail = false;
   for (const w of UPSTREAM_WATCH) {
-    const head = await fetchUpstreamHead(w.repo, w.branch);
+    const [head, recent] = await Promise.all([
+      fetchUpstreamHead(w.repo, w.branch),
+      fetchRecentCommits(w.repo, w.branch, 5),
+    ]);
     if (!head) { anyFail = true; continue; }
-    const cmp = await fetchAheadCount(localSha, w.repo, w.branch);
     remotes.push({
       id: w.id,
       label: w.label,
@@ -178,10 +187,12 @@ export async function getUpstreamWatch() {
       headShort: head.short,
       message: head.message,
       date: head.date,
-      status: cmp?.status || null,
-      aheadBy: cmp ? cmp.aheadBy : null,
-      // Deep link: what they have that we don't (files tab = per-file pick list).
-      compareUrl: `https://github.com/${GITHUB_CONFIG.apiRepo}/compare/${localSha || "master"}...${w.repo.split("/")[0]}:${w.repo.split("/")[1]}:${w.branch}?expand=1`,
+      recent: recent || [],
+      // File-level diff of their latest commit (history-independent).
+      commitUrl: `https://github.com/${w.repo}/commit/${head.sha}`,
+      commitsUrl: `https://github.com/${w.repo}/commits/${w.branch}`,
+      // Full compare vs our fork (files tab = per-file pick list for the CLI).
+      compareUrl: `https://github.com/${GITHUB_CONFIG.apiRepo}/compare/master...${w.repo.split("/")[0]}:${w.repo.split("/")[1]}:${w.branch}?expand=1`,
     });
   }
   watchCache.info = {

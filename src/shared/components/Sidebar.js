@@ -46,7 +46,7 @@ const systemItems = [
   { href: "/dashboard/proxy-pools", label: "Proxy Pools", icon: "lan" },
 ];
 
-function NavLink({ href, icon, label, active, onClick, sub = false }) {
+function NavLink({ href, icon, label, active, onClick, sub = false, dot = false }) {
   return (
     <Link
       href={href}
@@ -72,6 +72,9 @@ function NavLink({ href, icon, label, active, onClick, sub = false }) {
         {icon}
       </span>
       <span className="text-[13px] font-medium leading-none min-w-0 truncate" title={label}>{label}</span>
+      {dot && (
+        <span className="ml-auto h-2 w-2 rounded-full bg-primary shrink-0" title="New upstream commits" />
+      )}
     </Link>
   );
 }
@@ -85,6 +88,7 @@ export default function Sidebar({ onClose }) {
   const [isUpdating, setIsUpdating] = useState(false);
   const [shutdownCountdown, setShutdownCountdown] = useState(0);
   const [enableTranslator, setEnableTranslator] = useState(false);
+  const [upstreamDot, setUpstreamDot] = useState(false);
   const { copied, copy } = useCopyToClipboard(2000);
 
   const INSTALL_CMD = updateInfo?.installCmd || UPDATER_CONFIG.installCmdLatest;
@@ -101,6 +105,23 @@ export default function Sidebar({ onClose }) {
     fetch("/api/version")
       .then(res => res.json())
       .then(data => { if (data.hasUpdate) setUpdateInfo(data); })
+      .catch(() => {});
+  }, []);
+
+  // Upstream dot: compare watched heads vs last-seen SHAs in localStorage.
+  // Seen marks are written by the Upstream Watch page itself on every visit.
+  useEffect(() => {
+    fetch("/api/upstream-watch")
+      .then(res => res.json())
+      .then(data => {
+        try {
+          const unseen = (data?.remotes || []).some((r) => {
+            if (!r?.headSha) return false;
+            return localStorage.getItem(`9router:upstreamSeen:${r.id}`) !== r.headSha;
+          });
+          setUpstreamDot(unseen);
+        } catch { /* storage blocked */ }
+      })
       .catch(() => {});
   }, []);
 
@@ -292,6 +313,7 @@ export default function Sidebar({ onClose }) {
                   label={item.label}
                   active={isActive(item.href)}
                   onClick={onClose}
+                  dot={item.href === '/dashboard/upstream-watch' ? upstreamDot : false}
                 />
               ) : null;
             })}

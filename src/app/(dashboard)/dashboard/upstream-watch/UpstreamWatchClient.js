@@ -32,6 +32,12 @@ export default function UpstreamWatchClient() {
       const res = await fetch("/api/upstream-watch").then((r) => r.json());
       setData(res);
       setError(res.lookupFailed ? "GitHub unreachable — showing nothing. Retry in a few minutes." : "");
+      // Mark current heads as seen so the sidebar dot clears until new commits land.
+      try {
+        for (const r of res?.remotes || []) {
+          if (r?.id && r?.headSha) localStorage.setItem(`9router:upstreamSeen:${r.id}`, r.headSha);
+        }
+      } catch { /* storage blocked */ }
     } catch (e) {
       setError(e?.message || "Failed to load upstream status");
     } finally {

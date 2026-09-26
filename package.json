@@ -1,7 +1,7 @@
 {
   "name": "9router-kyyoa",
-  "version": "0.2.0",
-  "description": "9router-kyyoa — Kyyoa's fork of the 9Router web dashboard",
+  "version": "0.3.0",
+  "description": "9router-kyyoa \u2014 Kyyoa's fork of the 9Router web dashboard",
   "private": true,
   "scripts": {
     "dev": "next dev --port 20127",
@@ -54,7 +54,7 @@
   "optionalDependencies": {
     "better-sqlite3": "^12.6.2"
   },
-  "comment_better_sqlite3": "kept in optionalDependencies so npm install doesn't fail on systems without build tools — sql.js is used as fallback at runtime",
+  "comment_better_sqlite3": "kept in optionalDependencies so npm install doesn't fail on systems without build tools \u2014 sql.js is used as fallback at runtime",
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.18",
     "eslint": "^9",

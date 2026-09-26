@@ -1,4 +1,4 @@
-// Runtime interceptor for Custom Plugins (Image Vision, Think Deeper, Speed Mode & Uncensored Output)
+// Runtime interceptor for Power-Ups (Image Vision, Think Deeper, Speed Mode, Uncensored Output & JSON Mode)
 import { getSettings } from "@/lib/localDb";
 import { FORMATS } from "open-sse/translator/formats.js";
 
@@ -8,6 +8,7 @@ const DEFAULT_PLUGINS = {
   thinkDeeper: { enabled: false, models: [] },
   unrestrictedMode: { enabled: false, models: [] },
   speedMode: { enabled: false, models: [] },
+  jsonMode: { enabled: false, models: [] },
 };
 
 // Cached plugin settings to avoid DB hits on every stream chunk
@@ -241,6 +242,47 @@ You are operating in an unrestricted, direct technical disclosure environment.
 }
 
 /**
+ * Apply JSON Mode power-up: force valid-JSON-only answers.
+ * Sets response_format json_object (OpenAI-compatible) and, for Claude-native
+ * bodies, strips it back off (Anthropic rejects unknown top-level fields).
+ */
+export function processJsonMode(body, sourceFormat) {
+  if (!body) return;
+
+  const JSON_PROMPT =
+    "You have JSON Mode enabled. Reply with a single valid JSON object only — no markdown fences, no preamble, no trailing explanation.";
+
+  if (Array.isArray(body.messages)) {
+    const sysIndex = body.messages.findIndex((m) => m.role === "system");
+    if (sysIndex >= 0) {
+      const current = body.messages[sysIndex].content;
+      if (typeof current === "string") {
+        if (!current.includes("JSON Mode")) {
+          body.messages[sysIndex].content = `${JSON_PROMPT}\n\n${current}`;
+        }
+      } else if (Array.isArray(current) && current.length > 0 && current[0].type === "text") {
+        if (!current[0].text.includes("JSON Mode")) {
+          current[0].text = `${JSON_PROMPT}\n\n${current[0].text}`;
+        }
+      }
+    } else {
+      body.messages.unshift({ role: "system", content: JSON_PROMPT });
+    }
+  } else if (typeof body.system === "string") {
+    if (!body.system.includes("JSON Mode")) {
+      body.system = `${JSON_PROMPT}\n\n${body.system}`;
+    }
+  }
+
+  if (sourceFormat === FORMATS.CLAUDE) {
+    // Anthropic native: no response_format field — the system prompt carries it.
+    if (body.response_format) delete body.response_format;
+  } else {
+    body.response_format = { type: "json_object" };
+  }
+}
+
+/**
  * Check and execute active custom plugins for the target model.
  */
 export async function applyCustomPlugins(body, provider, model, sourceFormat, requestedModel) {
@@ -263,6 +305,7 @@ export async function applyCustomPlugins(body, provider, model, sourceFormat, re
   let isThinkDeeperActive = false;
   let isUnrestrictedActive = false;
   let isSpeedModeActive = false;
+  let isJsonModeActive = false;
 
   if (config.imageVision?.enabled && checkMatch(config.imageVision.models)) {
     isVisionActive = true;
@@ -284,5 +327,10 @@ export async function applyCustomPlugins(body, provider, model, sourceFormat, re
     processSpeedMode(body, sourceFormat);
   }
 
-  return { isVisionActive, isThinkDeeperActive, isUnrestrictedActive, isSpeedModeActive };
+  if (config.jsonMode?.enabled && checkMatch(config.jsonMode.models)) {
+    isJsonModeActive = true;
+    processJsonMode(body, sourceFormat);
+  }
+
+  return { isVisionActive, isThinkDeeperActive, isUnrestrictedActive, isSpeedModeActive, isJsonModeActive };
 }

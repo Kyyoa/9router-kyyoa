@@ -12,7 +12,9 @@ export async function GET() {
       thinkDeeper: { enabled: false, models: [] },
       unrestrictedMode: { enabled: false, models: [] },
       speedMode: { enabled: false, models: [] },
+      jsonMode: { enabled: false, models: [] },
     };
+    if (!customPlugins.jsonMode) customPlugins.jsonMode = { enabled: false, models: [] };
     return NextResponse.json({ customPlugins }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("Error getting custom plugins:", error);
@@ -44,6 +46,10 @@ export async function PUT(request) {
       speedMode: {
         enabled: Boolean(customPlugins.speedMode?.enabled),
         models: Array.isArray(customPlugins.speedMode?.models) ? customPlugins.speedMode.models.filter(Boolean) : [],
+      },
+      jsonMode: {
+        enabled: Boolean(customPlugins.jsonMode?.enabled),
+        models: Array.isArray(customPlugins.jsonMode?.models) ? customPlugins.jsonMode.models.filter(Boolean) : [],
       },
     };
 

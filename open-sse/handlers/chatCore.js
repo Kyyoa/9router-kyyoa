@@ -197,8 +197,8 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   // Expose raw client headers to translators/executors for session-id resolution
   if (credentials) credentials.rawHeaders = clientRawRequest?.headers || {};
 
-  // Execute active custom plugins (Image Vision, Think Deeper, Speed Mode & Uncensored Output)
-  let pluginResult = { isVisionActive: false, isThinkDeeperActive: false, isUnrestrictedActive: false, isSpeedModeActive: false };
+  // Execute active power-ups (Image Vision, Think Deeper, Speed Mode, Uncensored Output & JSON Mode)
+  let pluginResult = { isVisionActive: false, isThinkDeeperActive: false, isUnrestrictedActive: false, isSpeedModeActive: false, isJsonModeActive: false };
   try {
     pluginResult = await applyCustomPlugins(body, provider, model, sourceFormat, requestedModel);
   } catch (err) {

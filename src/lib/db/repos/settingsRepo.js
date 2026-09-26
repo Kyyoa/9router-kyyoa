@@ -28,6 +28,7 @@ const DEFAULT_SETTINGS = {
     thinkDeeper: { enabled: false, models: [] },
     unrestrictedMode: { enabled: false, models: [] },
     speedMode: { enabled: false, models: [] },
+    jsonMode: { enabled: false, models: [] },
   },
   requireLogin: true,
   requireApiKey: true,

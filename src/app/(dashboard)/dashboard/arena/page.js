@@ -317,10 +317,10 @@ function ArenaContent() {
       <div className="flex flex-col gap-2">
         <h1 className="text-xl font-bold leading-none flex items-center gap-2">
           <span className="material-symbols-outlined size-[22px] text-[22px] leading-none shrink-0 text-primary">swords</span>
-          Compare Models
+          Battle Model
         </h1>
         <p className="text-sm text-text-muted">
-          Send the same prompt to up to {MAX_MODELS} models and compare speed, cost and output.
+          Send the same prompt to up to {MAX_MODELS} models and battle speed, cost and output.
         </p>
         <p className="text-[11px] text-text-muted">
           Each answer streams live, so the time to first token shows a slow model still working.

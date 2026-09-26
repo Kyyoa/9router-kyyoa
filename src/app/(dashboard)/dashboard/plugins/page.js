@@ -20,7 +20,7 @@ const PLUGINS = [
     iconColor: "text-blue-500",
     iconBg: "bg-blue-500/10 border-blue-500/20",
     description:
-      "Enable image understanding for models that don't natively support vision. Images are converted to text descriptions, allowing any model to process visual content in CLI tools and agents.",
+      "Bikin model yang buta gambar jadi bisa 'melihat'. Gambar diubah jadi deskripsi teks — kepake buat CLI tools & agent yang kirim screenshot.",
   },
   {
     key: "thinkDeeper",
@@ -29,7 +29,7 @@ const PLUGINS = [
     iconColor: "text-purple-500",
     iconBg: "bg-purple-500/10 border-purple-500/20",
     description:
-      "Enhance reasoning with multi-step chain-of-thought analysis. Forces the model to break problems into steps before answering, producing more thorough and accurate responses.",
+      "Paksa model mikir step-by-step dalam tag <think> sebelum jawab. Buat soal susah: debugging, logika, arsitektur. Token lebih boros, jawaban lebih teliti.",
   },
   {
     key: "unrestrictedMode",
@@ -38,7 +38,7 @@ const PLUGINS = [
     iconColor: "text-red-500",
     iconBg: "bg-red-500/10 border-red-500/20",
     description:
-      "Bypass standard AI refusals and guardrails. Injects an unrestricted direct technical directive, compelling the model to provide raw code, analysis, and uncensored answers (Note: may not work on some provider models).",
+      "Lewati penolakan standar AI. Model jawab langsung tanpa ceramah — buat analisa teknis mentah. Catatan: model ketat (Claude/GPT terbaru) bisa tetap nolak.",
   },
   {
     key: "speedMode",
@@ -47,7 +47,16 @@ const PLUGINS = [
     iconColor: "text-cyan-500",
     iconBg: "bg-cyan-500/10 border-cyan-500/20",
     description:
-      "Skip thinking for faster responses. Disables reasoning mode on the selected models and instructs them to answer directly, ideal for simple tasks where low latency matters more than deep analysis.",
+      "Matikan reasoning, jawab langsung tanpa mikir. Buat yang gampang-gampang: translate, format ulang, jawab singkat. Latensi turun drastis.",
+  },
+  {
+    key: "jsonMode",
+    title: "JSON Mode",
+    icon: "data_object",
+    iconColor: "text-emerald-500",
+    iconBg: "bg-emerald-500/10 border-emerald-500/20",
+    description:
+      "Paksa jawaban jadi 1 objek JSON valid — tanpa markdown, tanpa basa-basi. Buat coding agent & pipeline yang parse output model langsung.",
   },
 ];
 
@@ -56,6 +65,7 @@ const DEFAULT_PLUGINS_STATE = {
   thinkDeeper: { enabled: false, models: [] },
   unrestrictedMode: { enabled: false, models: [] },
   speedMode: { enabled: false, models: [] },
+  jsonMode: { enabled: false, models: [] },
 };
 
 function formatModelName(modelVal) {
@@ -106,6 +116,12 @@ export default function PluginsPage() {
                 enabled: Boolean(data.customPlugins.speedMode?.enabled),
                 models: Array.isArray(data.customPlugins.speedMode?.models)
                   ? data.customPlugins.speedMode.models
+                  : [],
+              },
+              jsonMode: {
+                enabled: Boolean(data.customPlugins.jsonMode?.enabled),
+                models: Array.isArray(data.customPlugins.jsonMode?.models)
+                  ? data.customPlugins.jsonMode.models
                   : [],
               },
             });
@@ -216,9 +232,9 @@ export default function PluginsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-text-main">Custom Plugins</h1>
+        <h1 className="text-2xl font-bold text-text-main">Power-Ups</h1>
         <p className="text-sm text-text-muted mt-1">
-          Extend model capabilities with plugins
+          Suntik kemampuan ekstra ke model favoritmu — nyalain, pilih model, beres
         </p>
       </div>
 
@@ -247,6 +263,11 @@ export default function PluginsPage() {
                   <h3 className="font-semibold text-base text-text-main">
                     {plugin.title}
                   </h3>
+                  {isEnabled && selectedModels.length > 0 && (
+                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-green-500/10 text-green-600 dark:text-green-400 whitespace-nowrap">
+                      AKTIF • {selectedModels.length} model
+                    </span>
+                  )}
                 </div>
                 <Toggle
                   checked={isEnabled}

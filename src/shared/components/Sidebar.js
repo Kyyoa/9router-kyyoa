@@ -88,6 +88,7 @@ export default function Sidebar({ onClose }) {
   const [isUpdating, setIsUpdating] = useState(false);
   const [shutdownCountdown, setShutdownCountdown] = useState(0);
   const [enableTranslator, setEnableTranslator] = useState(false);
+  const [maintainerMode, setMaintainerMode] = useState(false);
   const [upstreamDot, setUpstreamDot] = useState(false);
   const { copied, copy } = useCopyToClipboard(2000);
 
@@ -96,7 +97,10 @@ export default function Sidebar({ onClose }) {
   useEffect(() => {
     fetch("/api/settings")
       .then(res => res.json())
-      .then(data => { if (data.enableTranslator) setEnableTranslator(true); })
+      .then(data => {
+        if (data.enableTranslator) setEnableTranslator(true);
+        if (data.maintainerMode) setMaintainerMode(true);
+      })
       .catch(() => {});
   }, []);
 
@@ -304,7 +308,10 @@ export default function Sidebar({ onClose }) {
 
             {/* Debug items (inside System section, before Settings) */}
             {debugItems.map((item) => {
-              const show = item.href !== '/dashboard/translator' || enableTranslator;
+              const showTranslator = item.href !== '/dashboard/translator' || enableTranslator;
+              // Upstream Watch is maintainer-only (behind the scenes, not for end users).
+              const showUpstream = item.href !== '/dashboard/upstream-watch' || maintainerMode;
+              const show = showTranslator && showUpstream;
               return show ? (
                 <NavLink
                   key={item.href}

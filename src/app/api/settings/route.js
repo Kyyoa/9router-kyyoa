@@ -22,11 +22,15 @@ export async function GET() {
     
     const enableRequestLogs = process.env.ENABLE_REQUEST_LOGS === "true";
     const enableTranslator = process.env.ENABLE_TRANSLATOR === "true";
-    
-    return NextResponse.json({ 
-      ...safeSettings, 
+    // Maintainer-only UI (Upstream Watch page). End users never see it.
+    // Enable with MAINTAINER_MODE=true in .env — behind the scenes only.
+    const maintainerMode = process.env.MAINTAINER_MODE === "true";
+
+    return NextResponse.json({
+      ...safeSettings,
       enableRequestLogs,
       enableTranslator,
+      maintainerMode,
       hasPassword: !!password
     }, { headers: SETTINGS_RESPONSE_HEADERS });
   } catch (error) {

@@ -15,6 +15,8 @@ export async function GET() {
       latestVersion: info.latestVersion || info.currentVersion,
       commitMessage: info.commitMessage || "",
       publishedAt: info.publishedAt || "",
+      releaseNotes: info.releaseNotes || "",
+      releaseUrl: info.releaseUrl || "",
       behindBy: Number.isFinite(info.behindBy) ? info.behindBy : null,
       hasUpdate: info.hasUpdate === true,
       revisionKnown: info.revisionKnown !== false,

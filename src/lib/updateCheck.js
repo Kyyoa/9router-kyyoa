@@ -73,6 +73,30 @@ function readGitRevision() {
   });
 }
 
+// Latest published Release on our own repo (the user update channel).
+// Null when no release exists yet or GitHub is unreachable.
+async function fetchLatestRelease() {
+  const data = await githubJson(`/repos/${GITHUB_CONFIG.apiRepo}/releases/latest`);
+  if (!data?.tag_name) return null;
+  return {
+    tag: String(data.tag_name),
+    name: String(data.name || data.tag_name).split("\n")[0],
+    date: data.published_at || "",
+    notes: String(data.body || "").slice(0, 2000),
+    url: data.html_url || "",
+  };
+}
+
+// Compare "v0.2.0" style tags numerically. >0 when a is newer than b.
+function compareVersions(a, b) {
+  const pa = String(a || "").replace(/^v/, "").split(".").map((x) => parseInt(x, 10) || 0);
+  const pb = String(b || "").replace(/^v/, "").split(".").map((x) => parseInt(x, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) - (pb[i] || 0);
+  }
+  return 0;
+}
+
 // Which commit master points at right now.
 async function fetchRemoteHead() {
   const data = await githubJson(`/repos/${GITHUB_CONFIG.apiRepo}/commits/${GITHUB_CONFIG.branch}?per_page=1`);
@@ -102,6 +126,33 @@ export async function getUpdateInfo(currentVersion) {
     return { ...cache.info, currentVersion, checkedAt: cache.fetchedAt };
   }
 
+  // Release channel: users update ONLY via your GitHub Releases (v0.2.0, ...),
+  // never from raw commits. Maintainer flow (you): cherry-pick via CLI, push,
+  // then publish a Release — every user install then shows the sidebar badge.
+  const release = await fetchLatestRelease();
+  cache.fetchedAt = Date.now();
+  if (release) {
+    const isNewer = compareVersions(release.tag, currentVersion) > 0;
+    cache.info = {
+      lookupFailed: false,
+      latestVersion: release.tag,
+      latestRevision: null,
+      commitMessage: release.name || release.tag,
+      publishedAt: release.date,
+      releaseNotes: release.notes || "",
+      releaseUrl: release.url || "",
+      revisionKnown: Boolean(localSha),
+      currentRevision: localSha ? localSha.slice(0, 7) : null,
+      behindBy: isNewer ? 1 : 0,
+      hasUpdate: isNewer,
+      installCmd: GIT_UPDATE_CMD,
+    };
+    cache.fetchedAt = Date.now();
+    return { ...cache.info, currentVersion, checkedAt: cache.fetchedAt };
+  }
+
+  // No release published yet (or unreachable): fall back to commit compare
+  // against our own repo so the badge still works pre-first-release.
   const head = await fetchRemoteHead();
   cache.fetchedAt = Date.now();
   if (!head) {

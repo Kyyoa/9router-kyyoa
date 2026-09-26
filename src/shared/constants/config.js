@@ -16,6 +16,12 @@ export const GITHUB_CONFIG = {
   branch: "master",
 };
 
+// Upstream remotes to watch (read-only — never auto-pulled).
+export const UPSTREAM_WATCH = [
+  { id: "decolua", label: "Decolua (utama)", repo: "Decolua/9router", branch: "master" },
+  { id: "serenhope", label: "Serenhope (acuan 2)", repo: "serenhope/9router", branch: "master" },
+];
+
 // Post-login thank-you dialog: shown once per login, skippable forever.
 export const WELCOME_CONFIG = {
   shownKey: "9router:welcomeAfterLogin",

@@ -39,6 +39,7 @@ const workshopItems = [
 const debugItems = [
   { href: "/dashboard/console-log", label: "Console Log", icon: "monitor" },
   { href: "/dashboard/translator", label: "Translator", icon: "translate" },
+  { href: "/dashboard/upstream-watch", label: "Upstream Watch", icon: "radar" },
 ];
 
 const systemItems = [

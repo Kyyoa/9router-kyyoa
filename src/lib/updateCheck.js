@@ -8,7 +8,7 @@ import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import https from "node:https";
 import path from "node:path";
-import { GITHUB_CONFIG, UPDATER_CONFIG } from "@/shared/constants/config";
+import { GITHUB_CONFIG, UPDATER_CONFIG, UPSTREAM_WATCH } from "@/shared/constants/config";
 
 const API = "https://api.github.com";
 const CHECK_TTL_MS = 3600000; // one successful lookup per hour
@@ -130,4 +130,66 @@ export async function getUpdateInfo(currentVersion) {
   cache.info = info;
   cache.fetchedAt = Date.now();
   return { ...info, currentVersion, checkedAt: cache.fetchedAt };
+}
+
+// ---- Upstream Watch: compare fork HEAD against watched upstream remotes ----
+// Read-only: fetches each remote's head + compare count vs our local revision.
+// Same cache discipline as getUpdateInfo (1h success / 5min failure), shared
+// githubJson helper (User-Agent, 5s timeout, 2MB cap, fail-open null).
+const watchCache = (global.__upstreamWatch ??= { info: null, fetchedAt: 0 });
+
+async function fetchUpstreamHead(repo, branch) {
+  const data = await githubJson(`/repos/${repo}/commits/${branch}?per_page=1`);
+  const sha = data?.sha;
+  if (!sha) return null;
+  return {
+    sha,
+    short: sha.slice(0, 7),
+    message: String(data?.commit?.message || "").split("\n")[0],
+    date: data?.commit?.committer?.date || data?.commit?.author?.date || "",
+  };
+}
+
+async function fetchAheadCount(baseSha, repo, branch) {
+  if (!baseSha) return null;
+  const data = await githubJson(`/repos/${repo}/compare/${baseSha}...${branch}?per_page=1`);
+  if (!data || !["behind", "ahead", "diverged", "identical"].includes(data.status)) return null;
+  return { status: data.status, aheadBy: Number(data.ahead_by) || 0 };
+}
+
+export async function getUpstreamWatch() {
+  const ttl = watchCache.info && !watchCache.info.lookupFailed ? CHECK_TTL_MS : FAILURE_TTL_MS;
+  if (watchCache.info && Date.now() - watchCache.fetchedAt < ttl) {
+    return { ...watchCache.info, checkedAt: watchCache.fetchedAt };
+  }
+  const localSha = process.env.APP_REVISION || await readGitRevision();
+  const remotes = [];
+  let anyFail = false;
+  for (const w of UPSTREAM_WATCH) {
+    const head = await fetchUpstreamHead(w.repo, w.branch);
+    if (!head) { anyFail = true; continue; }
+    const cmp = await fetchAheadCount(localSha, w.repo, w.branch);
+    remotes.push({
+      id: w.id,
+      label: w.label,
+      repo: w.repo,
+      branch: w.branch,
+      headSha: head.sha,
+      headShort: head.short,
+      message: head.message,
+      date: head.date,
+      status: cmp?.status || null,
+      aheadBy: cmp ? cmp.aheadBy : null,
+      // Deep link: what they have that we don't (files tab = per-file pick list).
+      compareUrl: `https://github.com/${GITHUB_CONFIG.apiRepo}/compare/${localSha || "master"}...${w.repo.split("/")[0]}:${w.repo.split("/")[1]}:${w.branch}?expand=1`,
+    });
+  }
+  watchCache.info = {
+    lookupFailed: remotes.length === 0,
+    localShort: localSha ? localSha.slice(0, 7) : null,
+    remotes,
+  };
+  if (anyFail && remotes.length) watchCache.info.partial = true;
+  watchCache.fetchedAt = Date.now();
+  return { ...watchCache.info, checkedAt: watchCache.fetchedAt };
 }

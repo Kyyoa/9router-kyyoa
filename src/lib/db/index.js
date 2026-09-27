@@ -61,6 +61,11 @@ export {
   getDisabledModels, getDisabledByProvider, disableModels, enableModels,
 } from "./repos/disabledModelsRepo.js";
 
+// Favorite models (pinned shortcuts in the model picker)
+export {
+  getFavoriteModels, addFavoriteModel, removeFavoriteModel,
+} from "./repos/favoriteModelsRepo.js";
+
 // Usage
 export {
   statsEmitter, trackPendingRequest, getActiveRequests,

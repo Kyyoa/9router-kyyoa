@@ -99,6 +99,7 @@ export default function ModelSelectModal({
   const [providerNodes, setProviderNodes] = useState([]);
   const [customModels, setCustomModels] = useState([]);
   const [disabledModels, setDisabledModels] = useState({});
+  const [favorites, setFavorites] = useState([]);
    const [studioModels, setStudioModels] = useState([]);
   // Cursor and Cline expose the usable catalog per account, so the static catalog is
   // kept only as a fallback: it goes stale quickly and entitlements differ per account.
@@ -183,6 +184,45 @@ export default function ModelSelectModal({
   useEffect(() => {
     if (isOpen) fetchDisabledModels();
   }, [isOpen]);
+
+  const fetchFavorites = async () => {
+    try {
+      const res = await fetch("/api/models/favorites");
+      if (!res.ok) throw new Error(`Failed to fetch favorites: ${res.status}`);
+      const data = await res.json();
+      setFavorites(Array.isArray(data.favorites) ? data.favorites : []);
+    } catch (error) {
+      console.error("Error fetching favorites:", error);
+      setFavorites([]);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen) fetchFavorites();
+  }, [isOpen]);
+
+  const toggleFavorite = async (e, value) => {
+    e.stopPropagation();
+    if (!value) return;
+    const isFav = favorites.includes(value);
+    // Optimistic update — rollback on failure.
+    setFavorites((prev) => (isFav ? prev.filter((v) => v !== value) : [value, ...prev].slice(0, 20)));
+    try {
+      const res = isFav
+        ? await fetch(`/api/models/favorites?value=${encodeURIComponent(value)}`, { method: "DELETE" })
+        : await fetch("/api/models/favorites", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ value }),
+          });
+      if (!res.ok) throw new Error(`status ${res.status}`);
+      const data = await res.json();
+      if (Array.isArray(data.favorites)) setFavorites(data.favorites);
+    } catch (error) {
+      console.error("Error toggling favorite:", error);
+      fetchFavorites();
+    }
+  };
 
   const fetchStudioModels = async () => {
     try {
@@ -545,6 +585,41 @@ export default function ModelSelectModal({
     }
   };
 
+  // Resolve favorite values to display entries (skip stale ones whose
+  // provider/model no longer exists). Shown as a top section, most-recent first.
+  const favoriteEntries = useMemo(() => {
+    const lookup = new Map();
+    Object.values(groupedModels || {}).forEach((g) =>
+      (g.models || []).forEach((m) => { if (m?.value && !lookup.has(m.value)) lookup.set(m.value, m); })
+    );
+    (combos || []).forEach((c) => {
+      if (c?.name && !lookup.has(c.name)) lookup.set(c.name, { id: c.name, name: c.name, value: c.name });
+    });
+    (studioModels || []).forEach((sm) => {
+      if (sm?.callName && !lookup.has(sm.callName)) lookup.set(sm.callName, { id: sm.callName, name: sm.displayName || sm.callName, value: sm.callName });
+    });
+    const q = searchQuery.trim().toLowerCase();
+    return favorites
+      .map((v) => lookup.get(v))
+      .filter(Boolean)
+      .filter((m) => !q || String(m.name || "").toLowerCase().includes(q) || String(m.id || "").toLowerCase().includes(q));
+  }, [favorites, groupedModels, combos, studioModels, searchQuery]);
+
+  const favStar = (value, extraClass = "") => (
+    <span
+      onClick={(e) => toggleFavorite(e, value)}
+      title={favorites.includes(value) ? "Lepas dari favorit" : "Pin ke favorit"}
+      className={`inline-flex items-center leading-none cursor-pointer hover:scale-110 transition-transform ${extraClass}`}
+    >
+      <span
+        className={`material-symbols-outlined leading-none ${favorites.includes(value) ? "fill-1 text-amber-400" : "text-text-muted/40 hover:text-amber-400"}`}
+        style={{ fontSize: "13px" }}
+      >
+        star
+      </span>
+    </span>
+  );
+
   return (
     <Modal
       isOpen={isOpen}
@@ -560,7 +635,7 @@ export default function ModelSelectModal({
       {/* Info bar */}
       <div className="flex items-center gap-2 mb-3 px-2.5 py-2 bg-primary/8 border border-primary/20 rounded-lg text-xs text-text-muted">
         <span className="material-symbols-outlined text-primary shrink-0" style={{ fontSize: "14px" }}>info</span>
-        <span>Click a model to add it, click again to remove it, and the change is saved automatically.</span>
+        <span>Click a model to add it, click again to remove it, and the change is saved automatically. Star a model to pin it in Favorit.</span>
       </div>
 
       {/* Search - compact */}
@@ -581,7 +656,47 @@ export default function ModelSelectModal({
 
       {/* Models grouped by provider - compact */}
       <div className="max-h-[400px] overflow-y-auto space-y-3">
-        {/* Combos section - always first */}
+        {/* Favorites section — pinned shortcuts, always first */}
+        {favoriteEntries.length > 0 && (
+          <div>
+            <div className="flex items-center gap-1.5 mb-1.5 sticky top-0 bg-surface py-0.5">
+              <span className="material-symbols-outlined text-amber-400 text-[14px]">star</span>
+              <span className="text-xs font-medium text-primary">Favorit</span>
+              <span className="text-[10px] text-text-muted">({favoriteEntries.length})</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {favoriteEntries.map((model) => {
+                const isSelected = selectedModel === model.value;
+                return (
+                  <button
+                    key={`fav-${model.value}`}
+                    onClick={() => handleSelect(model)}
+                    className={`
+                      px-2 py-1 rounded-xl text-xs font-medium transition-all border hover:cursor-pointer flex items-center gap-1
+                      ${isSelected
+                        ? "bg-primary text-white border-primary"
+                        : addedModelValues.includes(model.value)
+                          ? "bg-primary border-primary text-white hover:bg-primary-hover"
+                          : "bg-surface border-amber-400/40 text-text-main hover:border-amber-400 hover:bg-amber-400/5"
+                      }
+                    `}
+                  >
+                    <span className="flex items-center gap-1">
+                      {addedModelValues.includes(model.value) && (
+                        <span className="material-symbols-outlined leading-none" style={{ fontSize: "10px" }}>check</span>
+                      )}
+                      {model.name}
+                      <CapacityBadges caps={getCaps(model.value)} />
+                      {favStar(model.value)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Combos section — after Favorites */}
         {filteredCombos.length > 0 && (
           <div>
             <div className="flex items-center gap-1.5 mb-1.5 sticky top-0 bg-surface py-0.5">
@@ -717,6 +832,7 @@ export default function ModelSelectModal({
                         <>
                           {model.name}
                           <CapacityBadges caps={getCaps(model.value)} />
+                          {!isPlaceholder && favStar(model.value)}
                         </>
                       )}
                     </span>

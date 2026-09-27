@@ -576,8 +576,14 @@ export async function POST(request) {
             error = "Invalid cookie - copy __Secure-1PSID from gemini.google.com DevTools -> Application -> Cookies";
           } else {
             const html = await res.text().catch(() => "");
-            if (html.includes("SNlM0e") || html.includes("BardChatUi")) {
+            if (html.includes("SNlM0e")) {
               isValid = true;
+            } else if (html.includes("BardChatUi")) {
+              // Half-logged-in page: chat shell loads but the session token is
+              // missing. Cookie may still work for chat — accept it and let
+              // the executor surface a real 401 if it does not.
+              isValid = true;
+              error = "Cookie accepted but session token missing — chat test recommended";
             } else {
               isValid = false;
               error = "Invalid cookie - rejected by gemini.google.com, re-copy __Secure-1PSID";

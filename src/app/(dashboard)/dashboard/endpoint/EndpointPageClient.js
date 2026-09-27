@@ -17,6 +17,7 @@ import EndpointRow from "./components/EndpointRow";
 import StatusAlert from "./components/StatusAlert";
 import Tooltip from "./components/Tooltip";
 import SecurityWarning from "./components/SecurityWarning";
+import { cn } from "@/shared/utils/cn";
 
 function formatTokensNumber(num) {
   if (!num || num <= 0) return "0";
@@ -34,6 +35,64 @@ const RESET_INTERVAL_OPTIONS = [
   { value: "30d", label: "Every 30 Days (30d)" },
   { value: "custom", label: "Custom Interval..." },
 ];
+
+const PERMISSION_OPTIONS = [
+  { key: "manageApiKeys", label: "Create, edit and delete API keys", icon: "key", desc: "Lets this key manage other API keys" },
+  { key: "manageModels", label: "Create, edit and delete models", icon: "auto_awesome", desc: "Custom models, aliases and combos" },
+  { key: "manageProviders", label: "Create, edit and delete providers", icon: "dns", desc: "Provider connections and API keys" },
+  { key: "viewUsage", label: "View usage", icon: "bar_chart", desc: "Usage numbers for this key only" },
+];
+
+const EMPTY_PERMISSIONS = { manageApiKeys: false, manageModels: false, manageProviders: false, viewUsage: true };
+
+function PermissionsEditor({ value, onChange, allowed }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label className="text-sm font-medium text-text-main">Permissions</label>
+      <p className="text-xs text-text-muted">
+        What this key may do once it signs in. The sidebar and the forms it opens follow these.
+      </p>
+      <div className="flex flex-col gap-1.5 mt-1">
+        {PERMISSION_OPTIONS.map((opt) => {
+          const locked = !allowed[opt.key];
+          const checked = locked ? false : Boolean(value?.[opt.key]);
+          return (
+            <label
+              key={opt.key}
+              className={cn(
+                "flex items-start gap-2.5 rounded-lg border border-border-subtle bg-surface-2 px-3 py-2.5 transition-colors",
+                locked ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:border-primary/40"
+              )}
+            >
+              <input
+                type="checkbox"
+                className="mt-0.5 size-4 accent-[var(--color-primary)] shrink-0"
+                checked={checked}
+                disabled={locked}
+                onChange={(e) => onChange({ ...EMPTY_PERMISSIONS, ...value, [opt.key]: e.target.checked })}
+              />
+              <span className="flex min-w-0 flex-col gap-0.5">
+                <span className="flex items-center gap-1.5 text-sm font-medium text-text-main">
+                  <span className="material-symbols-outlined text-[16px] text-primary">{opt.icon}</span>
+                  {opt.label}
+                </span>
+                <span className="text-xs text-text-muted">
+                  {locked ? "Your key does not hold this permission" : opt.desc}
+                </span>
+              </span>
+            </label>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+PermissionsEditor.propTypes = {
+  value: PropTypes.object,
+  onChange: PropTypes.func.isRequired,
+  allowed: PropTypes.object,
+};
 
 function generateSnippet(lang, apiKey, baseUrl) {
   const url = `${baseUrl}/v1/chat/completions`;
@@ -81,7 +140,22 @@ export default function APIPageClient({ machineId }) {
   const [snippetLang, setSnippetLang] = useState("curl");
 
   const [requireApiKey, setRequireApiKey] = useState(false);
- const [tunnelDashboardAccess, setTunnelDashboardAccess] = useState(false);
+  const [tunnelDashboardAccess, setTunnelDashboardAccess] = useState(false);
+  const [authStatus, setAuthStatus] = useState(null);
+  const [newKeyPermissions, setNewKeyPermissions] = useState({ ...EMPTY_PERMISSIONS });
+  const [editPermissions, setEditPermissions] = useState({ ...EMPTY_PERMISSIONS });
+  const isApiKeyUser = authStatus?.role === "apikey";
+  const creatorPermissions = authStatus?.permissions || { manageApiKeys: true, manageModels: true, manageProviders: true, viewUsage: true };
+  const creatorTokenLimit = authStatus?.tokenLimit || 0;
+  const creatorAllowedModels = authStatus?.allowedModels || "*";
+  // A key that is itself limited to certain models can only hand those same models on.
+  const scopedModelPatterns =
+    isApiKeyUser && creatorAllowedModels !== "*"
+      ? String(creatorAllowedModels)
+        .split(",")
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean)
+      : null;
 
  // Cloudflare Tunnel state
   const [tunnelChecking, setTunnelChecking] = useState(true);
@@ -240,10 +314,15 @@ export default function APIPageClient({ machineId }) {
   const loadSettings = async () => {
     setTunnelChecking(true);
     try {
-      const [settingsRes, statusRes] = await Promise.all([
+      const [settingsRes, statusRes, authRes] = await Promise.all([
         fetch("/api/settings"),
-        fetch("/api/tunnel/status", { cache: "no-store" })
+        fetch("/api/tunnel/status", { cache: "no-store" }),
+        fetch("/api/auth/status", { cache: "no-store" }),
       ]);
+      if (authRes?.ok) {
+        const authData = await authRes.json().catch(() => null);
+        if (authData) setAuthStatus(authData);
+      }
       if (settingsRes.ok) {
         const data = await settingsRes.json();
         setRequireApiKey(data.requireApiKey || false);
@@ -733,6 +812,11 @@ export default function APIPageClient({ machineId }) {
       finalReset = newKeyReset === "custom" ? (newKeyCustomReset.trim() || "never") : newKeyReset;
     }
 
+    if (creatorTokenLimit > 0 && limitNum > creatorTokenLimit) {
+      alert(`Token limit cannot exceed your maximum (${creatorTokenLimit}).`);
+      return;
+    }
+
     try {
       const res = await fetch("/api/keys", {
         method: "POST",
@@ -746,6 +830,7 @@ export default function APIPageClient({ machineId }) {
           tpmLimit: newKeyTpm ? Number(newKeyTpm) : 0,
           ipWhitelist: newKeyIpWhitelist.trim(),
           expiresAt: newKeyExpiresAt || null,
+          permissions: newKeyPermissions,
         }),
       });
       const data = await res.json();
@@ -763,6 +848,7 @@ export default function APIPageClient({ machineId }) {
         setNewKeyIpWhitelist("");
         setShowAddModal(false);
         setNewKeyExpiresAt("");
+        setNewKeyPermissions({ ...EMPTY_PERMISSIONS });
  } else {
  alert(data?.error || "Failed to create key");
  }
@@ -795,6 +881,7 @@ export default function APIPageClient({ machineId }) {
  setNewKeyTpm(sourceKey.tpmLimit ? String(sourceKey.tpmLimit) : "");
  setNewKeyIpWhitelist(sourceKey.ipWhitelist || "");
  setNewKeyExpiresAt(sourceKey.expiresAt || "");
+ setNewKeyPermissions(sourceKey.permissions || { ...EMPTY_PERMISSIONS });
  setShowAddModal(true);
  };
 
@@ -1098,7 +1185,7 @@ export default function APIPageClient({ machineId }) {
         </div>
 
         {/* Security warnings when tunnel or tailscale is active */}
-        {(tunnelEnabled || tsEnabled) && (
+        {!isApiKeyUser && (tunnelEnabled || tsEnabled) && (
           <div className="mt-4 flex flex-col gap-2">
             {!requireApiKey && (
               <SecurityWarning
@@ -1110,7 +1197,7 @@ export default function APIPageClient({ machineId }) {
         )}
 
         {/* Tunnel dashboard access option */}
-        {(tunnelEnabled || tsEnabled) && (
+        {!isApiKeyUser && (tunnelEnabled || tsEnabled) && (
           <div className="mt-4 pt-4 border-t border-border flex flex-wrap items-center gap-3">
             <Toggle
               checked={tunnelDashboardAccess}
@@ -1137,6 +1224,7 @@ export default function APIPageClient({ machineId }) {
           </Button>
         </div>
 
+        {!isApiKeyUser && (
         <div className="flex flex-wrap items-center justify-between gap-3 pb-4 mb-4 border-b border-border">
           <div className="min-w-0 flex-1">
             <p className="font-medium">Require API key</p>
@@ -1150,8 +1238,9 @@ export default function APIPageClient({ machineId }) {
             onChange={() => handleRequireApiKey(!requireApiKey)}
           />
         </div>
+        )}
 
-        {isRemoteHost && !requireApiKey && (
+        {!isApiKeyUser && isRemoteHost && !requireApiKey && (
           <div className="mb-4 -mt-2">
             <SecurityWarning message="Endpoint is exposed without an API key." />
           </div>
@@ -1268,6 +1357,7 @@ export default function APIPageClient({ machineId }) {
                       setEditTpm(key.tpmLimit ? String(key.tpmLimit) : "");
                       setEditIpWhitelist(key.ipWhitelist || "");
                       setEditExpiresAt(key.expiresAt || "");
+                      setEditPermissions(key.permissions || { ...EMPTY_PERMISSIONS });
                     }}
                     className="p-2 hover:bg-black/5 dark:hover:bg-white/5 rounded text-text-muted hover:text-primary transition-all"
                     title="Edit key settings & quota"
@@ -1330,6 +1420,7 @@ export default function APIPageClient({ machineId }) {
             value={newKeyLimit}
             onChange={(e) => setNewKeyLimit(e.target.value)}
             placeholder="e.g. 88000000"
+            hint={creatorTokenLimit > 0 ? `Your maximum is ${creatorTokenLimit.toLocaleString()}` : "0 or leave empty for unlimited"}
           />
  {Number(newKeyLimit) > 0 && (
  <Select
@@ -1386,7 +1477,7 @@ export default function APIPageClient({ machineId }) {
               value={newKeyAllowedModels}
               readOnly
               inputClassName="truncate font-mono"
-              hint="Pick models with Select Models. * allows all models."
+              hint={isApiKeyUser && creatorAllowedModels !== "*" ? `Limited to your allowed models: ${creatorAllowedModels}` : "Pick models with Select Models. * allows all models."}
             />
             {parseAllowedModelsList(newKeyAllowedModels).length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-1">
@@ -1423,6 +1514,11 @@ export default function APIPageClient({ machineId }) {
  onChange={(e) => setNewKeyExpiresAt(e.target.value)}
  hint="Key stops working after this date; leave empty for no expiry"
  />
+          <PermissionsEditor
+            value={newKeyPermissions}
+            onChange={setNewKeyPermissions}
+            allowed={creatorPermissions}
+          />
           <div className="flex gap-2 w-full mt-2">
             <Button onClick={handleCreateKey} fullWidth disabled={!newKeyName.trim()} className="min-h-[44px]">
               Create
@@ -1460,6 +1556,7 @@ export default function APIPageClient({ machineId }) {
             value={editLimit}
             onChange={(e) => setEditLimit(e.target.value)}
             placeholder="e.g. 88000000"
+            hint={creatorTokenLimit > 0 ? `Your maximum is ${creatorTokenLimit.toLocaleString()}` : undefined}
           />
  {Number(editLimit) > 0 && (
  <Select
@@ -1516,7 +1613,7 @@ export default function APIPageClient({ machineId }) {
               value={editAllowedModels}
               readOnly
               inputClassName="truncate font-mono"
-              hint="Pick models with Select Models. * allows all models."
+              hint={isApiKeyUser && creatorAllowedModels !== "*" ? `Limited to your allowed models: ${creatorAllowedModels}` : "Pick models with Select Models. * allows all models."}
             />
             {parseAllowedModelsList(editAllowedModels).length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-1">
@@ -1553,6 +1650,11 @@ export default function APIPageClient({ machineId }) {
  onChange={(e) => setEditExpiresAt(e.target.value)}
  hint="Key stops working after this date; leave empty for no expiry"
  />
+          <PermissionsEditor
+            value={editPermissions}
+            onChange={setEditPermissions}
+            allowed={creatorPermissions}
+          />
           <div className="flex gap-2 w-full mt-2">
             <Button
               onClick={() => {
@@ -1561,6 +1663,10 @@ export default function APIPageClient({ machineId }) {
                 let finalReset = "never";
                 if (limitNum > 0) {
                   finalReset = editReset === "custom" ? (editCustomReset.trim() || "never") : editReset;
+                }
+                if (creatorTokenLimit > 0 && limitNum > creatorTokenLimit) {
+                  alert(`Token limit cannot exceed your maximum (${creatorTokenLimit}).`);
+                  return;
                 }
                 handleUpdateKeyQuota(editingKey.id, {
                   name: editName.trim() || editingKey.name,
@@ -1571,6 +1677,7 @@ export default function APIPageClient({ machineId }) {
                   tpmLimit: editTpm ? Number(editTpm) : 0,
                   ipWhitelist: editIpWhitelist.trim(),
                   expiresAt: editExpiresAt || null,
+                  permissions: editPermissions,
                 });
               }}
               fullWidth
@@ -1635,6 +1742,7 @@ export default function APIPageClient({ machineId }) {
           modelAliases={modelAliases}
           title="Select Allowed Models"
           addedModelValues={parseAllowedModelsList(pickerTarget === "create" ? newKeyAllowedModels : editAllowedModels)}
+          allowedModelPatterns={scopedModelPatterns}
           closeOnSelect={false}
         />
       )}

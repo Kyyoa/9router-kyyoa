@@ -7,6 +7,8 @@ const ICON_ALIASES = {
   "vercel-ai-gateway": "vercel",
   "ollama-search": "ollama",
   "deepseek-web": "deepseek",
+  "gemini-web": "gemini",
+  "kimi-web": "kimi",
 };
 
 const TYPE_PREFIX_ALIASES = {

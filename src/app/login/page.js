@@ -18,6 +18,21 @@ export default function LoginPage() {
   const [samlLoginLabel, setSamlLoginLabel] = useState("Sign in with SAML SSO");
   const [mustChange, setMustChange] = useState(false);
   const [newPassword, setNewPassword] = useState("");
+  const [showKeyLogin, setShowKeyLogin] = useState(false);
+  const [apiKey, setApiKey] = useState("");
+  const [noAccess, setNoAccess] = useState(false);
+
+  // A key that signed in but holds no permission would bounce between /login and
+  // the dashboard, so it stays here and can sign out instead.
+  const handleSignOut = async () => {
+    setLoading(true);
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch {
+      // The cookie may already be gone; the reload below settles the state.
+    }
+    window.location.assign("/login");
+  };
 
   // Countdown for rate-limit
   useEffect(() => {
@@ -41,7 +56,12 @@ export default function LoginPage() {
         if (res.ok) {
           const data = await res.json();
           if (data.authenticated === true || data.requireLogin === false) {
-            window.location.assign("/dashboard");
+            if (data.role === "apikey" && !data.homePath) {
+              setNoAccess(true);
+              setHasPassword(!!data.hasPassword);
+              return;
+            }
+            window.location.assign(data.homePath || "/dashboard");
             return;
           }
           setHasPassword(!!data.hasPassword);
@@ -70,10 +90,11 @@ export default function LoginPage() {
     setResetHint("");
 
     try {
+      const payload = showKeyLogin ? { apiKey } : { password };
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify(payload),
       });
 
       if (res.ok) {
@@ -85,10 +106,15 @@ export default function LoginPage() {
         if (typeof window !== "undefined") {
           sessionStorage.setItem("9router:justLoggedIn", "true");
         }
-        window.location.assign("/dashboard");
+        if (data.role === "apikey" && !data.homePath) {
+          setNoAccess(true);
+          setHasPassword(true);
+          return;
+        }
+        window.location.assign(data.homePath || "/dashboard");
       } else {
         const data = await res.json();
-        setError(data.error || "Invalid password");
+        setError(data.error || (showKeyLogin ? "Invalid API Key" : "Invalid password"));
         if (data.resetHint) setResetHint(data.resetHint);
         if (data.retryAfter) setRetryAfter(Number(data.retryAfter));
       }
@@ -163,16 +189,29 @@ export default function LoginPage() {
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-primary mb-2">9Router</h1>
           <p className="text-text-muted">
-            {samlAvailable
+            {noAccess
+              ? "This API key is signed in but holds no dashboard permission"
+              : samlAvailable
               ? "Sign in with SAML 2.0 Single Sign-On"
               : oidcAvailable
               ? "Sign in with your OIDC provider to access the dashboard"
+              : showKeyLogin
+              ? "Enter your API key to access authorised features"
               : "Enter your password to access the dashboard"}
           </p>
         </div>
 
         <Card>
-          {mustChange ? (
+          {noAccess ? (
+            <div className="flex flex-col gap-4">
+              <p className="text-sm text-text-muted text-center">
+                Ask the owner of this instance to grant a permission on the key, or sign in with the dashboard password instead.
+              </p>
+              <Button type="button" variant="primary" className="w-full" loading={loading} onClick={handleSignOut}>
+                Sign out
+              </Button>
+            </div>
+          ) : mustChange ? (
             <form onSubmit={handleSetNewPassword} className="flex flex-col gap-4">
               <p className="text-sm text-amber-600 dark:text-amber-400 text-center">
                 Set a new password before accessing the dashboard remotely.
@@ -210,6 +249,44 @@ export default function LoginPage() {
             {ssoAvailable && passwordAvailable && <div className="h-px bg-border/60" />}
 
             {passwordAvailable ? (
+              showKeyLogin ? (
+              <form onSubmit={handleLogin} className="flex flex-col gap-4">
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-medium">API Key</label>
+                  <Input
+                    type="password"
+                    placeholder="Enter your API key (sk-...)"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    required
+                    autoFocus
+                  />
+                  {error && <p className="text-xs text-red-500">{error}</p>}
+                  <p className="text-xs text-text-muted">
+                    Log in using an assigned API key to access authorised features.
+                  </p>
+                </div>
+
+                <Button
+                  type="submit"
+                  variant="primary"
+                  className="w-full"
+                  loading={loading}
+                  disabled={retryAfter > 0 || !apiKey}
+                >
+                  {retryAfter > 0 ? `Wait ${retryAfter}s` : "Login with API Key"}
+                </Button>
+
+                <button
+                  type="button"
+                  onClick={() => { setShowKeyLogin(false); setError(""); }}
+                  className="flex items-center justify-center gap-1.5 text-xs text-text-muted hover:text-text-main transition-colors cursor-pointer"
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>lock</span>
+                  Back to password login
+                </button>
+              </form>
+              ) : (
               <form onSubmit={handleLogin} className="flex flex-col gap-4">
                 {isSsoEnabled && !ssoAvailable && (
                   <p className="text-xs text-amber-600 dark:text-amber-400 text-center">
@@ -259,7 +336,17 @@ export default function LoginPage() {
                 <p className="text-xs text-center text-text-muted mt-2">
                   Default password is <code className="bg-sidebar px-1 rounded">kyyoa123</code>
                 </p>
+
+                <button
+                  type="button"
+                  onClick={() => { setShowKeyLogin(true); setError(""); }}
+                  className="flex items-center justify-center gap-1.5 text-xs text-text-muted hover:text-text-main transition-colors cursor-pointer"
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>key</span>
+                  Have an API key? Sign in with it
+                </button>
               </form>
+              )
             ) : (
               error && <p className="text-xs text-red-500">{error}</p>
             )}

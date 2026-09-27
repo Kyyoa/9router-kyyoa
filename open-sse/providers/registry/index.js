@@ -36,6 +36,7 @@ import p32 from "./firecrawl.js";
 import p33 from "./fireworks.js";
 import p34 from "./gemini-cli.js";
 import p35 from "./gemini.js";
+import p35b from "./gemini-web.js";
 import p36 from "./github.js";
 import p37 from "./gitlab.js";
 import p38 from "./glm-cn.js";
@@ -53,6 +54,7 @@ import p50 from "./jina-reader.js";
 import p51 from "./kilocode.js";
 import p52 from "./kimchi.js";
 import p53 from "./kimi.js";
+import p53b from "./kimi-web.js";
 import p54 from "./kiro.js";
 import p55 from "./linkup.js";
 import p56 from "./local-device.js";
@@ -162,6 +164,7 @@ export default [
   p33,
   p34,
   p35,
+  p35b,
   p36,
   p37,
   p38,
@@ -179,6 +182,7 @@ export default [
   p51,
   p52,
   p53,
+  p53b,
   p54,
   p55,
   p56,

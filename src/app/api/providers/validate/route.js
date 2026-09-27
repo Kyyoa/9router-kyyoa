@@ -539,6 +539,98 @@ export async function POST(request) {
           break;
         }
 
+        case "gemini-web": {
+          let cookie = apiKey.trim();
+          if (cookie.startsWith("{")) {
+            try {
+              const parsed = JSON.parse(cookie);
+              const cookies =
+                parsed.cookies && typeof parsed.cookies === "object" && !Array.isArray(parsed.cookies)
+                  ? parsed.cookies
+                  : parsed;
+              const pairs = Object.entries(cookies)
+                .filter(([, v]) => typeof v === "string" && v.trim().length > 0)
+                .map(([k, v]) => `${k}=${String(v).trim()}`);
+              if (pairs.length > 0) cookie = pairs.join("; ");
+            } catch {}
+          }
+          if (!cookie) {
+            isValid = false;
+            error = "Invalid cookie format";
+            break;
+          }
+          if (!cookie.includes("=")) cookie = `__Secure-1PSID=${cookie}`;
+
+          const res = await fetch("https://gemini.google.com/app", {
+            method: "GET",
+            headers: {
+              Cookie: cookie,
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+              Accept: "text/html",
+            },
+            signal: AbortSignal.timeout(10000),
+          }).catch(() => null);
+
+          if (!res || !res.ok) {
+            isValid = false;
+            error = "Invalid cookie - copy __Secure-1PSID from gemini.google.com DevTools -> Application -> Cookies";
+          } else {
+            const html = await res.text().catch(() => "");
+            if (html.includes("SNlM0e") || html.includes("BardChatUi")) {
+              isValid = true;
+            } else {
+              isValid = false;
+              error = "Invalid cookie - rejected by gemini.google.com, re-copy __Secure-1PSID";
+            }
+          }
+          break;
+        }
+
+        case "kimi-web": {
+          let token = apiKey.trim();
+          if (token.startsWith("{") && token.endsWith("}")) {
+            try {
+              const parsed = JSON.parse(token);
+              const access = parsed?.access_token || parsed?.token || "";
+              if (access && typeof access === "string") token = access.trim();
+            } catch {}
+          }
+          const bearer = token.match(/^(?:authorization:\s*)?bearer\s+([^;\s]+)/i);
+          if (bearer) token = bearer[1];
+          for (const key of ["access_token", "kimi-auth"]) {
+            const m = token.match(new RegExp(`(?:^|[\\s;])${key}=([^;\\s]+)`));
+            if (m) { token = m[1]; break; }
+          }
+          if (!token) {
+            isValid = false;
+            error = "Invalid token format";
+            break;
+          }
+
+          const res = await fetch("https://www.kimi.ai/apiv2/kimi.gateway.user.v1.UserService/GetUserInfo", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/connect+json",
+              Accept: "*/*",
+              Authorization: `Bearer ${token}`,
+              Origin: "https://www.kimi.ai",
+              Referer: "https://www.kimi.ai/",
+              "connect-protocol-version": "1",
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+            },
+            body: "\x00\x00\x00\x00\x00",
+            signal: AbortSignal.timeout(8000),
+          }).catch(() => null);
+
+          if (!res || !res.ok) {
+            isValid = false;
+            error = "Invalid token - copy access_token from www.kimi.ai DevTools -> Application -> Local Storage";
+          } else {
+            isValid = true;
+          }
+          break;
+        }
+
         case "qoder":
         case "qoder-cn": {
           // PAT (pt-...) needs the job-token exchange before it can sign

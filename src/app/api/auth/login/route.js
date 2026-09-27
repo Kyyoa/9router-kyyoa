@@ -7,6 +7,7 @@ import { isOidcConfigured } from "@/lib/auth/oidc";
 import { isSamlConfigured } from "@/lib/auth/saml.js";
 import { checkLock, recordFail, recordSuccess, getClientIp } from "@/lib/auth/loginLimiter";
 import { isTrustedNetworkRequest } from "@/lib/auth/trustedPeer";
+import { normalizePermissions, firstAllowedPage } from "@/lib/auth/permissionPaths";
 
 const RESET_HINT = "Forgot password? Reset to default via 9Router CLI → Settings → Reset Password to Default.";
 const NO_STORE_HEADERS = { "Cache-Control": "no-store" };
@@ -29,12 +30,51 @@ export async function POST(request) {
       );
     }
 
-    const { password } = await request.json();
+    const { password, apiKey } = await request.json();
     const settings = await getSettings();
 
     // Block login via tunnel/tailscale if dashboard access is disabled
     if (isTunnelRequest(request, settings) && settings.tunnelDashboardAccess !== true) {
       return NextResponse.json({ error: "Dashboard access via tunnel is disabled" }, { status: 403 });
+    }
+
+    // Support Login via API Key
+    if (apiKey && typeof apiKey === "string" && apiKey.trim()) {
+      const { validateApiKey, getApiKeyByKey } = await import("@/lib/localDb");
+      const keyStr = apiKey.trim();
+      const valid = await validateApiKey(keyStr, null, ip);
+      if (valid !== true) {
+        let msg = "Invalid API key";
+        if (valid === "KEY_DISABLED") msg = "API key is disabled";
+        else if (valid === "KEY_EXPIRED") msg = "API key is expired";
+        else if (valid === "QUOTA_EXCEEDED") msg = "API key quota exceeded";
+        else if (valid === "IP_NOT_ALLOWED") msg = "Client IP not allowed for this API key";
+        return NextResponse.json({ error: msg }, { status: 401 });
+      }
+
+      const keyObj = await getApiKeyByKey(keyStr);
+      if (!keyObj) {
+        return NextResponse.json({ error: "API key not found" }, { status: 401 });
+      }
+
+      recordSuccess(ip);
+      const cookieStore = await cookies();
+      const permissions = normalizePermissions(keyObj.permissions);
+      await setDashboardAuthCookie(cookieStore, request, {
+        role: "apikey",
+        keyId: keyObj.id,
+        keyName: keyObj.name || "API Key",
+        apiKey: keyObj.key,
+        permissions,
+        allowedModels: keyObj.allowedModels || "*",
+        tokenLimit: keyObj.tokenLimit || 0,
+      });
+
+      const homePath = firstAllowedPage(permissions);
+      return NextResponse.json(
+        { success: true, role: "apikey", mustChangePassword: false, homePath },
+        { headers: NO_STORE_HEADERS }
+      );
     }
 
     // Default password is 'kyyoa123' if not set
@@ -92,9 +132,9 @@ export async function POST(request) {
       }
 
       const cookieStore = await cookies();
-      await setDashboardAuthCookie(cookieStore, request);
+      await setDashboardAuthCookie(cookieStore, request, { role: "admin" });
 
-      return NextResponse.json({ success: true, mustChangePassword: false }, { headers: NO_STORE_HEADERS });
+      return NextResponse.json({ success: true, role: "admin", mustChangePassword: false }, { headers: NO_STORE_HEADERS });
     }
 
     const { remainingBeforeLock } = recordFail(ip);

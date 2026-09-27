@@ -4,6 +4,7 @@ import { getSettings } from "@/lib/localDb";
 import { isOidcConfigured } from "@/lib/auth/oidc";
 import { isSamlConfigured } from "@/lib/auth/saml.js";
 import { getDashboardAuthSession } from "@/lib/auth/dashboardSession";
+import { firstAllowedPage } from "@/lib/auth/permissionPaths";
 
 export async function GET() {
   try {
@@ -18,14 +19,21 @@ export async function GET() {
     const samlName = String(session?.samlName || "").trim();
     const samlEmail = String(session?.samlEmail || "").trim();
 
+    const role = session?.role || "admin";
+    const permissions = session?.permissions || (role === "admin" ? { manageApiKeys: true, manageModels: true, manageProviders: true, viewUsage: true } : { manageApiKeys: false, manageModels: false, manageProviders: false, viewUsage: true });
+    const isApiKeyLogin = role === "apikey";
+
     const displayName =
       samlName ||
       samlEmail ||
       oidcName ||
       oidcEmail ||
-      (session?.saml ? "SAML user" : session?.oidc ? "OIDC user" : "Password user");
+      (isApiKeyLogin ? (session?.keyName || "API Key user") : session?.saml ? "SAML user" : session?.oidc ? "OIDC user" : "Password user");
 
-    const loginMethod = session?.saml ? "SAML" : session?.oidc ? "OIDC" : "Password";
+    const loginMethod = isApiKeyLogin ? "API Key" : session?.saml ? "SAML" : session?.oidc ? "OIDC" : "Password";
+    // Where this session belongs after signing in. A key without any usable
+    // permission gets null so the login page can stop instead of redirecting in a loop.
+    const homePath = isApiKeyLogin && session ? firstAllowedPage(permissions) : "/dashboard";
 
     return NextResponse.json({
       requireLogin,
@@ -39,6 +47,13 @@ export async function GET() {
       displayName,
       loginMethod,
       authenticated: !!session,
+      role,
+      permissions,
+      homePath,
+      apiKey: session?.apiKey || null,
+      keyId: session?.keyId || null,
+      allowedModels: session?.allowedModels || "*",
+      tokenLimit: session?.tokenLimit || 0,
       oidcName: oidcName || null,
       oidcEmail: oidcEmail || null,
       oidcLogin: !!session?.oidc,

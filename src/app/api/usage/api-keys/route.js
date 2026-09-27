@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getApiKeys } from "@/lib/localDb";
 import { getAdapter } from "@/lib/db/driver.js";
+import { getSessionContext } from "@/lib/auth/dashboardPermissions";
 
 export const dynamic = "force-dynamic";
 
@@ -42,8 +43,17 @@ function maskKey(key) {
 // request/token/cost aggregates and per-model breakdown from usageHistory.
 export async function GET() {
   try {
-    const [keys, db] = await Promise.all([getApiKeys(), getAdapter()]);
+    const ctx = await getSessionContext();
+    const ownKey = ctx.apiKeyFilter;
+    const allKeys = await getApiKeys();
+    // An API key session only ever sees its own row, so it cannot read other keys'
+    // names, quotas or model scopes.
+    const keys = ownKey ? allKeys.filter((k) => k.key === ownKey) : allKeys;
+    const [db] = await Promise.all([getAdapter()]);
     const now = Date.now();
+
+    const keyCond = ownKey ? "WHERE apiKey = ?" : "";
+    const keyParams = ownKey ? [ownKey] : [];
 
     const totalsByRaw = db.all(
       `SELECT apiKey, COUNT(*) AS requests,
@@ -51,7 +61,8 @@ export async function GET() {
               COALESCE(SUM(completionTokens), 0) AS completionTokens,
               COALESCE(SUM(cost), 0) AS cost,
               MAX(timestamp) AS lastUsed
-         FROM usageHistory GROUP BY apiKey`
+         FROM usageHistory ${keyCond} GROUP BY apiKey`,
+      keyParams
     );
     const totals = {};
     for (const r of totalsByRaw) totals[r.apiKey || ""] = r;
@@ -61,8 +72,9 @@ export async function GET() {
               COALESCE(SUM(promptTokens + completionTokens), 0) AS tokens,
               COALESCE(SUM(cost), 0) AS cost,
               MAX(timestamp) AS lastUsed
-         FROM usageHistory GROUP BY apiKey, model
-        ORDER BY requests DESC`
+         FROM usageHistory ${keyCond} GROUP BY apiKey, model
+        ORDER BY requests DESC`,
+      keyParams
     );
     const modelsByKey = {};
     for (const r of modelsByRaw) {
@@ -77,7 +89,8 @@ export async function GET() {
     }
 
     const statusByRaw = db.all(
-      `SELECT apiKey, status, COUNT(*) AS count FROM usageHistory GROUP BY apiKey, status`
+      `SELECT apiKey, status, COUNT(*) AS count FROM usageHistory ${keyCond} GROUP BY apiKey, status`,
+      keyParams
     );
     const errorsByKey = {};
     for (const r of statusByRaw) {
@@ -124,64 +137,70 @@ export async function GET() {
       };
     });
 
-    // Keys that appear in usageHistory but were deleted from apiKeys still have
-    // history worth showing; group it under one "deleted keys" row.
-    const known = new Set(keys.map((k) => k.key));
-    const orphan = Object.keys(totals).filter((raw) => raw && !known.has(raw));
-    if (orphan.length > 0) {
-      let requests = 0, promptTokens = 0, completionTokens = 0, cost = 0, lastUsed = null;
-      let ok = 0, errors = 0;
-      const modelsMap = new Map();
-      for (const raw of orphan) {
-        const t = totals[raw];
-        requests += t.requests || 0;
-        promptTokens += t.promptTokens || 0;
-        completionTokens += t.completionTokens || 0;
-        cost += t.cost || 0;
-        if (t.lastUsed && (!lastUsed || t.lastUsed > lastUsed)) lastUsed = t.lastUsed;
-        const st = errorsByKey[raw] || { ok: 0, errors: 0 };
-        ok += st.ok;
-        errors += st.errors;
-        for (const m of modelsByKey[raw] || []) {
-          const prev = modelsMap.get(m.model) || { model: m.model, requests: 0, tokens: 0, cost: 0, lastUsed: null };
-          prev.requests += m.requests;
-          prev.tokens += m.tokens;
-          prev.cost += m.cost;
-          if (!prev.lastUsed || m.lastUsed > prev.lastUsed) prev.lastUsed = m.lastUsed;
-          modelsMap.set(m.model, prev);
+    // Orphan usage (history for keys no longer registered) is only
+    // meaningful when listing every key. An API key session sees one row.
+    if (!ownKey) {
+      const known = new Set(keys.map((k) => k.key));
+      const orphan = Object.keys(totals).filter((raw) => raw && !known.has(raw));
+      if (orphan.length > 0) {
+        let requests = 0, promptTokens = 0, completionTokens = 0, cost = 0, lastUsed = null;
+        let ok = 0, errors = 0;
+        const modelsMap = new Map();
+        for (const raw of orphan) {
+          const t = totals[raw];
+          requests += t.requests || 0;
+          promptTokens += t.promptTokens || 0;
+          completionTokens += t.completionTokens || 0;
+          cost += t.cost || 0;
+          if (t.lastUsed && (!lastUsed || t.lastUsed > lastUsed)) lastUsed = t.lastUsed;
+          const st = errorsByKey[raw] || { ok: 0, errors: 0 };
+          ok += st.ok;
+          errors += st.errors;
+          for (const m of modelsByKey[raw] || []) {
+            const prev = modelsMap.get(m.model) || { model: m.model, requests: 0, tokens: 0, cost: 0, lastUsed: null };
+            prev.requests += m.requests;
+            prev.tokens += m.tokens;
+            prev.cost += m.cost;
+            if (!prev.lastUsed || m.lastUsed > prev.lastUsed) prev.lastUsed = m.lastUsed;
+            modelsMap.set(m.model, prev);
+          }
         }
+        result.push({
+          id: "deleted",
+          name: "Deleted keys",
+          keyMasked: "",
+          isActive: false,
+          createdAt: null,
+          expiresAt: null,
+          expired: false,
+          tokenLimit: 0,
+          usedTokens: promptTokens + completionTokens,
+          usagePercent: null,
+          resetInterval: "never",
+          nextResetAt: null,
+          rpmLimit: 0,
+          tpmLimit: 0,
+          requests,
+          promptTokens,
+          completionTokens,
+          totalTokens: promptTokens + completionTokens,
+          cost,
+          lastUsed,
+          okRequests: ok,
+          errorRequests: errors,
+          errorRate: ok + errors > 0 ? errors / (ok + errors) : 0,
+          models: [...modelsMap.values()].sort((a, b) => b.requests - a.requests).slice(0, 8),
+        });
       }
-      result.push({
-        id: "deleted",
-        name: "Deleted keys",
-        keyMasked: "",
-        isActive: false,
-        createdAt: null,
-        expiresAt: null,
-        expired: false,
-        tokenLimit: 0,
-        usedTokens: promptTokens + completionTokens,
-        usagePercent: null,
-        resetInterval: "never",
-        nextResetAt: null,
-        rpmLimit: 0,
-        tpmLimit: 0,
-        requests,
-        promptTokens,
-        completionTokens,
-        totalTokens: promptTokens + completionTokens,
-        cost,
-        lastUsed,
-        okRequests: ok,
-        errorRequests: errors,
-        errorRate: ok + errors > 0 ? errors / (ok + errors) : 0,
-        models: [...modelsMap.values()].sort((a, b) => b.requests - a.requests).slice(0, 8),
-      });
     }
 
     result.sort((a, b) => (b.lastUsed || "").localeCompare(a.lastUsed || "") || a.name.localeCompare(b.name));
 
-    return NextResponse.json({ keys: result, generatedAt: new Date().toISOString() }, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json({
+      keys: result,
+      generatedAt: new Date().toISOString(),
+      permissions: ctx.permissions,
+    }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.log("Error aggregating per-key usage:", error);
     return NextResponse.json({ error: error?.message || "Failed to load per-key usage" }, { status: 500 });

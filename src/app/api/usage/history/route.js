@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getUsageHistory } from "@/lib/usageDb";
+import { getSessionContext } from "@/lib/auth/dashboardPermissions";
 
 export const dynamic = "force-dynamic";
 
@@ -7,7 +8,12 @@ export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
     const format = searchParams.get("format") || "json";
-    const history = await getUsageHistory();
+
+    const ctx = await getSessionContext();
+    const filter = {};
+    if (ctx.apiKeyFilter) filter.apiKey = ctx.apiKeyFilter;
+
+    const history = await getUsageHistory(filter);
 
     if (format === "csv") {
       const headers = ["timestamp", "provider", "model", "connectionId", "apiKeyMasked", "endpoint", "status", "cost", "promptTokens", "completionTokens"];

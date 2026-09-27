@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
 import { getAdapter } from "@/lib/db/driver.js";
+import { getSessionContext } from "@/lib/auth/dashboardPermissions";
 
 export const dynamic = "force-dynamic";
 
 const PERIOD_MS = { "24h": 86400000, "7d": 604800000, "30d": 2592000000, "60d": 5184000000 };
-// Statuses stored for a request that answered normally. Anything else (an HTTP
-// code like 429) is a failure, which is what saveFailedUsage writes.
 const OK_STATUSES = new Set(["ok", "success", "200"]);
 
 function cutoffFor(period) {
@@ -25,14 +24,23 @@ export async function GET(request) {
     const period = searchParams.get("period") || "7d";
     const cutoff = cutoffFor(period);
 
+    const ctx = await getSessionContext();
+    const keyFilter = ctx.apiKeyFilter;
+
     const db = await getAdapter();
+    const conds = [];
+    const params = [];
+    if (cutoff) { conds.push("timestamp >= ?"); params.push(cutoff); }
+    if (keyFilter) { conds.push("apiKey = ?"); params.push(keyFilter); }
+    const where = conds.length ? `WHERE ${conds.join(" AND ")}` : "";
+
     const rows = db.all(
       `SELECT status, model, COUNT(*) as count,
         SUM(promptTokens + completionTokens) as totalTokens
        FROM usageHistory
-       ${cutoff ? "WHERE timestamp >= ?" : ""}
+       ${where}
        GROUP BY status, model ORDER BY count DESC`,
-      cutoff ? [cutoff] : []
+      params
     );
 
     const byStatus = {};

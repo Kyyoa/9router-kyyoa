@@ -1,6 +1,16 @@
 import { v4 as uuidv4 } from "uuid";
 import { getAdapter } from "../driver.js";
 
+export function parsePermissions(permStr) {
+  if (!permStr) return { manageApiKeys: false, manageModels: false, manageProviders: false, viewUsage: true };
+  if (typeof permStr === "object") return permStr;
+  try {
+    return JSON.parse(permStr);
+  } catch {
+    return { manageApiKeys: false, manageModels: false, manageProviders: false, viewUsage: true };
+  }
+}
+
 function rowToKey(row) {
   if (!row) return null;
   return {
@@ -20,6 +30,7 @@ function rowToKey(row) {
     ipWhitelist: row.ipWhitelist || "",
     expiresAt: row.expiresAt || null,
     systemPrompt: row.systemPrompt || "",
+    permissions: parsePermissions(row.permissions),
   };
 }
 
@@ -64,9 +75,11 @@ export async function createApiKey(name, machineId, options = {}) {
     ipWhitelist: options.ipWhitelist || "",
     expiresAt: options.expiresAt || null,
     systemPrompt: options.systemPrompt || "",
+    permissions: typeof options.permissions === "object" ? options.permissions : parsePermissions(options.permissions),
   };
+  const permStr = typeof options.permissions === "string" ? options.permissions : JSON.stringify(apiKey.permissions);
   db.run(
-    `INSERT INTO apiKeys(id, key, name, machineId, isActive, createdAt, tokenLimit, usedTokens, resetInterval, lastResetAt, allowedModels, rpmLimit, tpmLimit, ipWhitelist, expiresAt, systemPrompt) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO apiKeys(id, key, name, machineId, isActive, createdAt, tokenLimit, usedTokens, resetInterval, lastResetAt, allowedModels, rpmLimit, tpmLimit, ipWhitelist, expiresAt, systemPrompt, permissions) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       apiKey.id,
       apiKey.key,
@@ -84,6 +97,7 @@ export async function createApiKey(name, machineId, options = {}) {
       apiKey.ipWhitelist,
       apiKey.expiresAt,
       apiKey.systemPrompt,
+      permStr,
     ]
   );
   return apiKey;
@@ -96,8 +110,9 @@ export async function updateApiKey(id, data) {
     const row = db.get(`SELECT * FROM apiKeys WHERE id = ?`, [id]);
     if (!row) return;
     const merged = { ...rowToKey(row), ...data };
+    const permStr = typeof merged.permissions === "string" ? merged.permissions : JSON.stringify(merged.permissions || {});
     db.run(
-      `UPDATE apiKeys SET key = ?, name = ?, machineId = ?, isActive = ?, tokenLimit = ?, usedTokens = ?, resetInterval = ?, lastResetAt = ?, allowedModels = ?, rpmLimit = ?, tpmLimit = ?, ipWhitelist = ?, expiresAt = ?, systemPrompt = ? WHERE id = ?`,
+      `UPDATE apiKeys SET key = ?, name = ?, machineId = ?, isActive = ?, tokenLimit = ?, usedTokens = ?, resetInterval = ?, lastResetAt = ?, allowedModels = ?, rpmLimit = ?, tpmLimit = ?, ipWhitelist = ?, expiresAt = ?, systemPrompt = ?, permissions = ? WHERE id = ?`,
       [
         merged.key,
         merged.name,
@@ -113,6 +128,7 @@ export async function updateApiKey(id, data) {
         merged.ipWhitelist || "",
         merged.expiresAt || null,
         merged.systemPrompt || "",
+        permStr,
         id,
       ]
     );

@@ -73,18 +73,28 @@ function readGitRevision() {
   });
 }
 
-// Latest published Release on our own repo (the user update channel).
+// Newest published Release on our own repo (the user update channel).
+// Uses the list endpoint + max-by-version instead of /releases/latest:
+// /latest answers by creation date (and is CDN-cached), so a republished
+// or backfilled tag could hide the real newest version. Drafts skipped.
 // Null when no release exists yet or GitHub is unreachable.
 async function fetchLatestRelease() {
-  const data = await githubJson(`/repos/${GITHUB_CONFIG.apiRepo}/releases/latest`);
-  if (!data?.tag_name) return null;
-  return {
-    tag: String(data.tag_name),
-    name: String(data.name || data.tag_name).split("\n")[0],
-    date: data.published_at || "",
-    notes: String(data.body || "").slice(0, 2000),
-    url: data.html_url || "",
-  };
+  const data = await githubJson(`/repos/${GITHUB_CONFIG.apiRepo}/releases?per_page=20`);
+  const list = Array.isArray(data) ? data : [];
+  let best = null;
+  for (const r of list) {
+    if (!r?.tag_name || r.draft) continue;
+    if (!best || compareVersions(String(r.tag_name), best.tag) > 0) {
+      best = {
+        tag: String(r.tag_name),
+        name: String(r.name || r.tag_name).split("\n")[0],
+        date: r.published_at || "",
+        notes: String(r.body || "").slice(0, 2000),
+        url: r.html_url || "",
+      };
+    }
+  }
+  return best;
 }
 
 // Compare "v0.2.0" style tags numerically. >0 when a is newer than b.

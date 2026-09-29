@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getApiKeys, createApiKey } from "@/lib/localDb";
 import { getConsistentMachineId } from "@/shared/utils/machineId";
-import { getSessionContext, clampPermissions } from "@/lib/auth/dashboardPermissions";
+import { getSessionContext, DEFAULT_PERMISSIONS } from "@/lib/auth/dashboardPermissions";
 import { parseAllowedModels, matchesAllowedModels } from "@/lib/db/repos/apiKeysRepo";
 
 export const dynamic = "force-dynamic";
@@ -11,9 +11,11 @@ export async function GET() {
   try {
     const ctx = await getSessionContext();
     const allKeys = await getApiKeys();
-    // An API key session only ever manages its own key, so hide the rest.
+    // An API key session sees its own key plus every key it handed out itself.
+    // Keys it cannot reach at all stay hidden, so a scoped session never reads
+    // another branch's numbers.
     const keys = ctx.session?.role === "apikey"
-      ? allKeys.filter((k) => k.key === ctx.session.apiKey)
+      ? allKeys.filter((k) => k.key === ctx.session.apiKey || k.createdBy === ctx.session.apiKey)
       : allKeys;
     return NextResponse.json({ keys });
   } catch (error) {
@@ -50,10 +52,13 @@ export async function POST(request) {
       return NextResponse.json({ error: `A key named "${trimmedName}" already exists. Use a different name.` }, { status: 409 });
     }
 
-    // Scoping: API key user cannot grant permissions beyond what they own
+    // Scoping: a session authenticated by an API key cannot hand out permissions at
+    // all. Whatever it asks for, the sub-key is created with the default (view usage
+    // only), so a key that can create keys cannot mint one with more reach than it
+    // was given. The dashboard renders the same rule as a disabled editor.
     let finalPermissions = requestedPermissions;
     if (ctx.session?.role === "apikey") {
-      finalPermissions = clampPermissions(ctx.permissions, requestedPermissions || {});
+      finalPermissions = DEFAULT_PERMISSIONS;
 
       // Token limit: sub-key cannot exceed creator's limit
       const creatorLimit = ctx.session.tokenLimit || 0;
@@ -65,12 +70,17 @@ export async function POST(request) {
         }, { status: 400 });
       }
 
-      // Allowed models: sub-key can only use a subset of creator's models
+      // Allowed models: sub-key can only use a subset of creator's models.
+      // Match against both the bare model id and the provider-qualified value,
+      // so a custom model entered by its bare id is not silently dropped.
       const creatorPatterns = parseAllowedModels(ctx.session.allowedModels);
       if (creatorPatterns) {
         const requestedList = (allowedModels || "*").split(",").map(m => m.trim().toLowerCase()).filter(Boolean);
         if (requestedList[0] !== "*") {
-          const filtered = requestedList.filter(m => matchesAllowedModels(creatorPatterns, m));
+          const filtered = requestedList.filter((model) =>
+            matchesAllowedModels(creatorPatterns, model) ||
+            matchesAllowedModels(creatorPatterns, `${model}/*`)
+          );
           allowedModels = filtered.length ? filtered.join(",") : creatorPatterns.join(",");
         } else {
           // Wildcard or empty request is clamped to the creator's own scope.
@@ -81,6 +91,7 @@ export async function POST(request) {
     }
 
     const machineId = await getConsistentMachineId();
+    const createdBy = ctx.session?.role === "apikey" ? ctx.session.apiKey : "dashboard";
     const apiKey = await createApiKey(trimmedName, machineId, {
       tokenLimit: tokenLimit !== undefined ? Number(tokenLimit) : 0,
       resetInterval: resetInterval || "never",
@@ -91,6 +102,7 @@ export async function POST(request) {
       expiresAt: expiresAt || null,
       systemPrompt: systemPrompt || "",
       permissions: finalPermissions,
+      createdBy,
     });
 
     return NextResponse.json({

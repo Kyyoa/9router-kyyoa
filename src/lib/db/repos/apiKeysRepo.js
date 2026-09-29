@@ -1,13 +1,21 @@
 import { v4 as uuidv4 } from "uuid";
 import { getAdapter } from "../driver.js";
+import { DEFAULT_PERMISSIONS } from "@/lib/auth/permissionPaths";
+// The allowed-model pattern language lives in a dependency-free module of its own:
+// the request gate, the /v1/models listing and the usage dashboards all read it, and
+// the self-check loads it without dragging in the database driver and uuid. Re-exported
+// here so the existing `from "./apiKeysRepo.js"` importers are unaffected.
+import { parseAllowedModels, matchesAllowedModels, buildAllowedModelsSql, applyModelChangesToAllowList } from "./allowedModels.js";
+
+export { parseAllowedModels, matchesAllowedModels, buildAllowedModelsSql };
 
 export function parsePermissions(permStr) {
-  if (!permStr) return { manageApiKeys: false, manageModels: false, manageProviders: false, viewUsage: true };
+  if (!permStr) return { ...DEFAULT_PERMISSIONS };
   if (typeof permStr === "object") return permStr;
   try {
     return JSON.parse(permStr);
   } catch {
-    return { manageApiKeys: false, manageModels: false, manageProviders: false, viewUsage: true };
+    return { ...DEFAULT_PERMISSIONS };
   }
 }
 
@@ -31,6 +39,7 @@ function rowToKey(row) {
     expiresAt: row.expiresAt || null,
     systemPrompt: row.systemPrompt || "",
     permissions: parsePermissions(row.permissions),
+    createdBy: row.createdBy || "",
   };
 }
 
@@ -76,10 +85,14 @@ export async function createApiKey(name, machineId, options = {}) {
     expiresAt: options.expiresAt || null,
     systemPrompt: options.systemPrompt || "",
     permissions: typeof options.permissions === "object" ? options.permissions : parsePermissions(options.permissions),
+    // The caller resolves who is creating the key. It is never inferred here:
+    // this module has no session, and reaching for one turned every create into
+    // a ReferenceError, which the route reported as a bare 500.
+    createdBy: options.createdBy || "",
   };
   const permStr = typeof options.permissions === "string" ? options.permissions : JSON.stringify(apiKey.permissions);
   db.run(
-    `INSERT INTO apiKeys(id, key, name, machineId, isActive, createdAt, tokenLimit, usedTokens, resetInterval, lastResetAt, allowedModels, rpmLimit, tpmLimit, ipWhitelist, expiresAt, systemPrompt, permissions) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO apiKeys(id, key, name, machineId, isActive, createdAt, tokenLimit, usedTokens, resetInterval, lastResetAt, allowedModels, rpmLimit, tpmLimit, ipWhitelist, expiresAt, systemPrompt, permissions, createdBy) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       apiKey.id,
       apiKey.key,
@@ -98,6 +111,7 @@ export async function createApiKey(name, machineId, options = {}) {
       apiKey.expiresAt,
       apiKey.systemPrompt,
       permStr,
+      apiKey.createdBy,
     ]
   );
   return apiKey;
@@ -112,7 +126,7 @@ export async function updateApiKey(id, data) {
     const merged = { ...rowToKey(row), ...data };
     const permStr = typeof merged.permissions === "string" ? merged.permissions : JSON.stringify(merged.permissions || {});
     db.run(
-      `UPDATE apiKeys SET key = ?, name = ?, machineId = ?, isActive = ?, tokenLimit = ?, usedTokens = ?, resetInterval = ?, lastResetAt = ?, allowedModels = ?, rpmLimit = ?, tpmLimit = ?, ipWhitelist = ?, expiresAt = ?, systemPrompt = ?, permissions = ? WHERE id = ?`,
+      `UPDATE apiKeys SET key = ?, name = ?, machineId = ?, isActive = ?, tokenLimit = ?, usedTokens = ?, resetInterval = ?, lastResetAt = ?, allowedModels = ?, rpmLimit = ?, tpmLimit = ?, ipWhitelist = ?, expiresAt = ?, systemPrompt = ?, permissions = ?, createdBy = ? WHERE id = ?`,
       [
         merged.key,
         merged.name,
@@ -129,6 +143,7 @@ export async function updateApiKey(id, data) {
         merged.expiresAt || null,
         merged.systemPrompt || "",
         permStr,
+        merged.createdBy || "",
         id,
       ]
     );
@@ -177,31 +192,6 @@ export function recordApiKeyUsageInWindow(key, tokens = 0) {
   const now = Date.now();
   if (!rateLimits[key]) rateLimits[key] = [];
   rateLimits[key].push({ ts: now, tokens: tokens || 0 });
-}
-
-/**
- * Allowed-model patterns of a key, or null when the key may use every model.
- * One definition for both the request gate and the /v1/models listing, so a key
- * can never see a model it would be refused at request time.
- */
-export function parseAllowedModels(allowedModels) {
- const raw = String(allowedModels ?? "").trim();
- if (!raw || raw === "*") return null;
- const patterns = raw.split(",").map((model) => model.trim().toLowerCase()).filter(Boolean);
- return patterns.length ? patterns : null;
-}
-
-/** Exact, `prefix*` and `*suffix` patterns, matched case-insensitively. */
-export function matchesAllowedModels(patterns, requestedModel) {
- if (!patterns) return true;
- const req = String(requestedModel || "").trim().toLowerCase();
- if (!req) return false;
- return patterns.some((allowed) => {
- if (allowed === "*" || allowed === req) return true;
- if (allowed.endsWith("*")) return req.startsWith(allowed.slice(0, -1));
- if (allowed.startsWith("*")) return req.endsWith(allowed.slice(1));
- return false;
- });
 }
 
 /** Patterns of the key used by a request; null when there is no key or it allows all. */
@@ -321,4 +311,35 @@ export async function validateApiKey(key, requestedModel = null, clientIp = null
   });
 
   return result;
+}
+
+/**
+ * Follow a model deletion or rename through every API key's allowlist.
+ *
+ * Callers name exactly what disappeared; nothing here scans the model catalog, so
+ * an unreachable provider cannot shrink anyone's list. Fail-open by construction:
+ * a throw anywhere below leaves every key as it was, and the mutation that
+ * triggered this has already been committed.
+ */
+export async function reconcileAllowedModels({ removed = [], renamed = {} } = {}) {
+  if (!removed.length && !Object.keys(renamed).length) {
+    return { updated: 0, emptied: [] };
+  }
+  try {
+    const keys = await getApiKeys();
+    let updated = 0;
+    const emptied = [];
+
+    for (const key of keys) {
+      const result = applyModelChangesToAllowList(key.allowedModels, { removed, renamed });
+      if (result.emptied) { emptied.push(key.name || key.id); continue; }
+      if (!result.changed) continue;
+      await updateApiKey(key.id, { allowedModels: result.value });
+      updated++;
+    }
+    return { updated, emptied };
+  } catch (err) {
+    console.error("[reconcileAllowedModels] failed to follow model change:", err);
+    return { updated: 0, emptied: [] };
+  }
 }

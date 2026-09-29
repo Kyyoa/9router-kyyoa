@@ -5,6 +5,10 @@ export const PERMISSION_KEYS = [
   "manageApiKeys",
   "manageModels",
   "manageProviders",
+  "manageTools",
+  "manageAdvanced",
+  "managePlugins",
+  "manageMediaProviders",
   "viewUsage",
 ];
 
@@ -12,6 +16,10 @@ export const DEFAULT_PERMISSIONS = {
   manageApiKeys: false,
   manageModels: false,
   manageProviders: false,
+  manageTools: false,
+  manageAdvanced: false,
+  managePlugins: false,
+  manageMediaProviders: false,
   viewUsage: true,
 };
 
@@ -19,6 +27,10 @@ export const FULL_PERMISSIONS = {
   manageApiKeys: true,
   manageModels: true,
   manageProviders: true,
+  manageTools: true,
+  manageAdvanced: true,
+  managePlugins: true,
+  manageMediaProviders: true,
   viewUsage: true,
 };
 
@@ -59,25 +71,36 @@ const READ_METHODS = ["GET", "HEAD"];
 const API_PERMISSION_RULES = [
   { prefix: "/api/keys", permissions: ["manageApiKeys"] },
   // The provider page needs the model catalog to render a connection, so reading it
-  // is shared with manageProviders while every write stays on manageModels.
-  { prefix: "/api/models/alias", permissions: ["manageModels", "manageProviders"], methods: READ_METHODS },
-  { prefix: "/api/models/disabled", permissions: ["manageModels", "manageProviders"], methods: READ_METHODS },
-  { prefix: "/api/models/availability", permissions: ["manageModels", "manageProviders"], methods: READ_METHODS },
-  { prefix: "/api/models/custom", permissions: ["manageModels", "manageProviders"], methods: READ_METHODS },
-  { prefix: "/api/model-editor", permissions: ["manageModels", "manageProviders"], methods: READ_METHODS },
-  { prefix: "/api/models", permissions: ["manageModels", "manageProviders"], methods: READ_METHODS },
-  { prefix: "/api/models/favorites", permissions: ["manageModels", "manageProviders"], methods: READ_METHODS },
-  { prefix: "/api/models/favorites", permissions: ["manageModels"] },
-  { prefix: "/api/combos", permissions: ["manageModels", "manageProviders"], methods: READ_METHODS },
-  { prefix: "/api/tags", permissions: ["manageModels", "manageProviders"], methods: READ_METHODS },
+  // is shared with manageProviders while every write stays on manageModels. Reading is
+  // also shared with manageApiKeys because the key forms pick allowed models from it.
+  { prefix: "/api/models/alias", permissions: ["manageModels", "manageProviders", "manageApiKeys"], methods: READ_METHODS },
+  { prefix: "/api/models/disabled", permissions: ["manageModels", "manageProviders", "manageApiKeys"], methods: READ_METHODS },
+  { prefix: "/api/models/availability", permissions: ["manageModels", "manageProviders", "manageApiKeys"], methods: READ_METHODS },
+  { prefix: "/api/models/custom", permissions: ["manageModels", "manageProviders", "manageApiKeys"], methods: READ_METHODS },
+  { prefix: "/api/model-editor", permissions: ["manageModels", "manageProviders", "manageApiKeys"], methods: READ_METHODS },
+  { prefix: "/api/models", permissions: ["manageModels", "manageProviders", "manageApiKeys"], methods: READ_METHODS },
+  { prefix: "/api/combos", permissions: ["manageModels", "manageProviders", "manageApiKeys"], methods: READ_METHODS },
+  { prefix: "/api/tags", permissions: ["manageModels", "manageProviders", "manageApiKeys"], methods: READ_METHODS },
   { prefix: "/api/models", permissions: ["manageModels"] },
+  { prefix: "/api/models/favorites", permissions: ["manageModels"] },
   { prefix: "/api/model-editor", permissions: ["manageModels"] },
   { prefix: "/api/combos", permissions: ["manageModels"] },
   { prefix: "/api/tags", permissions: ["manageModels"] },
   { prefix: "/api/providers", permissions: ["manageProviders"] },
   { prefix: "/api/provider-nodes", permissions: ["manageProviders"] },
   { prefix: "/api/pricing", permissions: ["manageProviders"] },
+  { prefix: "/api/cli-tools", permissions: ["manageTools"] },
+  { prefix: "/api/headroom", permissions: ["manageTools"] },
+  { prefix: "/api/translator", permissions: ["manageAdvanced"] },
+  { prefix: "/api/proxy-pools", permissions: ["manageAdvanced"] },
+  { prefix: "/api/pxpipe", permissions: ["manageAdvanced"] },
+  { prefix: "/api/plugins", permissions: ["managePlugins"] },
+  { prefix: "/api/media-providers", permissions: ["manageMediaProviders"] },
   { prefix: "/api/usage", permissions: ["viewUsage"] },
+  // Read-only catalog for a key session that holds only viewUsage. It answers
+  // GET only; any other method falls through to the /api/usage rule above and
+  // stays read-only there too, so no write access is ever granted here.
+  { prefix: "/api/usage/available-models", permissions: ["viewUsage"], methods: READ_METHODS },
 ];
 
 // Longest prefix first, so /api/model-editor is not swallowed by a /api/models style
@@ -111,25 +134,27 @@ const PAGE_PERMISSION_RULES = [
   { prefix: "/dashboard/model-editor", permissions: ["manageModels"] },
   { prefix: "/dashboard/arena", permissions: ["manageModels"] },
   { prefix: "/dashboard/presets", permissions: ["manageModels"] },
-  { prefix: "/dashboard/plugins", permissions: ["manageModels"] },
-  { prefix: "/dashboard/proxy-pools", permissions: [] },
-  { prefix: "/dashboard/console-log", permissions: [] },
-  { prefix: "/dashboard/translator", permissions: [] },
-  { prefix: "/dashboard/media-providers", permissions: [] },
-  { prefix: "/dashboard/plugins", permissions: [] },
-  { prefix: "/dashboard/mitm", permissions: [] },
-  { prefix: "/dashboard/pxpipe", permissions: [] },
-  { prefix: "/dashboard/token-saver", permissions: [] },
-  { prefix: "/dashboard/cli-tools", permissions: [] },
+  { prefix: "/dashboard/cli-tools", permissions: ["manageTools"] },
+  { prefix: "/dashboard/token-saver", permissions: ["manageTools"] },
+  { prefix: "/dashboard/console-log", permissions: ["manageAdvanced"] },
+  { prefix: "/dashboard/translator", permissions: ["manageAdvanced"] },
+  { prefix: "/dashboard/proxy-pools", permissions: ["manageAdvanced"] },
+  { prefix: "/dashboard/pxpipe", permissions: ["manageAdvanced"] },
+  { prefix: "/dashboard/mitm", permissions: ["manageAdvanced"] },
+  { prefix: "/dashboard/plugins", permissions: ["managePlugins"] },
+  { prefix: "/dashboard/skills", permissions: ["managePlugins"] },
+  { prefix: "/dashboard/media-providers", permissions: ["manageMediaProviders"] },
   { prefix: "/dashboard/basic-chat", permissions: [] },
   { prefix: "/dashboard/profile", permissions: [] },
-  { prefix: "/dashboard/skills", permissions: [] },
   // The dashboard index renders the endpoint page, so it follows the same permission.
   // Exact, so a page added later stays admin-only until it is named above.
   { prefix: "/dashboard", permissions: ["manageApiKeys"], exact: true },
 ];
 
-// null means admin only, [] means every session with any permission.
+// null means no rule matched, which canOpenPage reads as admin only. [] is also
+// closed to restricted sessions: canOpenPage asks whether ANY listed permission is
+// held, and an empty list has none to ask about. Write the permission name a page
+// needs; leaving [] is only a way to keep a page shut.
 export function requiredPermissionsForPage(pathname) {
   let best = null;
   let bestLength = -1;
@@ -154,6 +179,8 @@ export function canOpenPage(pathname, permissions) {
 
 // Landing page for a session, used after login and to bounce a restricted session
 // away from a page it has no permission for. Null when the key holds nothing usable.
+// Ordered so a broader permission is tried first: a full admin still lands on the
+// endpoint page even though every later candidate would also open.
 export function firstAllowedPage(permissions) {
   const candidates = [
     { path: "/dashboard/endpoint", permissions: ["manageApiKeys"] },
@@ -161,6 +188,14 @@ export function firstAllowedPage(permissions) {
     { path: "/dashboard/providers", permissions: ["manageProviders"] },
     { path: "/dashboard/model-editor", permissions: ["manageModels"] },
     { path: "/dashboard/combos", permissions: ["manageModels"] },
+    { path: "/dashboard/quota", permissions: ["manageProviders"] },
+    { path: "/dashboard/media-providers", permissions: ["manageMediaProviders"] },
+    { path: "/dashboard/plugins", permissions: ["managePlugins"] },
+    { path: "/dashboard/cli-tools", permissions: ["manageTools"] },
+    { path: "/dashboard/token-saver", permissions: ["manageTools"] },
+    { path: "/dashboard/console-log", permissions: ["manageAdvanced"] },
+    { path: "/dashboard/translator", permissions: ["manageAdvanced"] },
+    { path: "/dashboard/proxy-pools", permissions: ["manageAdvanced"] },
   ];
   const have = normalizePermissions(permissions);
   for (const candidate of candidates) {

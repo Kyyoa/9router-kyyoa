@@ -48,8 +48,26 @@ export async function POST(request) {
    return NextResponse.json({ error: "Logo must be a small PNG, JPEG, WebP or GIF data URL" }, { status: 400 });
  }
 
- // Determine type
- const nodeType = type || "openai-compatible";
+ // Determine type. An explicit type is required: silently defaulting an
+ // omitted type to openai-compatible created phantom "OpenAI Compatible"
+ // nodes from callers that never meant to add one.
+ const VALID_NODE_TYPES = new Set(["openai-compatible", "anthropic-compatible", "custom-embedding"]);
+ if (!type || !VALID_NODE_TYPES.has(type)) {
+ return NextResponse.json({ error: "Provider node type is required" }, { status: 400 });
+ }
+
+ // A provider node must not silently duplicate another one. Retries and
+ // double submits used to insert a second node with a fresh id because only
+ // the id was unique, so nodes with the same name or prefix piled up.
+ const existingNodes = await getProviderNodes();
+ if (existingNodes.some((n) => n.prefix?.toLowerCase() === prefix.trim().toLowerCase())) {
+ return NextResponse.json({ error: "A provider with this prefix already exists" }, { status: 409 });
+ }
+ if (existingNodes.some((n) => n.name?.toLowerCase() === name.trim().toLowerCase())) {
+ return NextResponse.json({ error: "A provider with this name already exists" }, { status: 409 });
+ }
+
+ const nodeType = type;
 
  if (nodeType === "openai-compatible") {
  if (!apiType || !["chat", "responses"].includes(apiType)) {

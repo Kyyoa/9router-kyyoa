@@ -26,5 +26,6 @@ export async function getSessionContext() {
     session,
     permissions: isApiKey ? normalizePermissions(session.permissions) : FULL_PERMISSIONS,
     apiKeyFilter: isApiKey ? session.apiKey : null,
+    allowedModels: session.allowedModels || "*",
   };
 }

@@ -118,6 +118,8 @@ export async function exportDb(options = null) {
       ipWhitelist: r.ipWhitelist,
       expiresAt: r.expiresAt || null,
       systemPrompt: r.systemPrompt || "",
+      permissions: r.permissions || "",
+      createdBy: r.createdBy || "",
     }));
   }
   if (isIncluded("combos")) {
@@ -257,9 +259,11 @@ export async function importDb(payload) {
         const ipWhitelist = k.ipWhitelist !== undefined ? k.ipWhitelist : (prev.ipWhitelist || "");
         const expiresAt = k.expiresAt !== undefined ? k.expiresAt : (prev.expiresAt || null);
         const systemPrompt = k.systemPrompt !== undefined ? k.systemPrompt : (prev.systemPrompt || "");
+        const permissions = k.permissions !== undefined ? k.permissions : (prev.permissions || "");
+        const createdBy = k.createdBy !== undefined ? k.createdBy : (prev.createdBy || "");
 
         db.run(
-          `INSERT OR REPLACE INTO apiKeys(id, key, name, machineId, isActive, createdAt, tokenLimit, usedTokens, resetInterval, lastResetAt, allowedModels, rpmLimit, tpmLimit, ipWhitelist, expiresAt, systemPrompt) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT OR REPLACE INTO apiKeys(id, key, name, machineId, isActive, createdAt, tokenLimit, usedTokens, resetInterval, lastResetAt, allowedModels, rpmLimit, tpmLimit, ipWhitelist, expiresAt, systemPrompt, permissions, createdBy) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             k.id,
             k.key,
@@ -277,6 +281,8 @@ export async function importDb(payload) {
             ipWhitelist,
             expiresAt,
             systemPrompt,
+            permissions,
+            createdBy,
           ]
         );
       }
@@ -376,6 +382,274 @@ export async function importDb(payload) {
       }
     }
   });
+
+  return await exportDb();
+}
+
+// Progressive variant of importDb used by background import jobs. Same restore
+// logic split into one transaction per section, with a progress callback and a
+// macrotask yield between sections so the event loop stays responsive.
+// importDb and exportDb above are intentionally left unchanged.
+export async function importDbProgressive(payload, onProgress) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new Error("Invalid database payload");
+  }
+  const db = await getAdapter();
+
+  // Snapshot existing apiKeys BEFORE wiping, so we can fill in missing fields from backup
+  const existingApiKeys = {};
+  for (const r of db.all(`SELECT * FROM apiKeys`)) {
+    existingApiKeys[r.id] = r;
+  }
+
+  const has = (key) => payload[key] !== undefined;
+  const stageNames = [
+    ["settings", ["settings"]],
+    ["providers", ["providerConnections", "providerNodes", "proxyPools"]],
+    ["apiKeys", ["apiKeys"]],
+    ["combos", ["combos"]],
+    ["usage", ["usageHistory", "usageDaily"]],
+    ["customModels", ["modelAliases", "customModels", "mitmAlias"]],
+    ["pricing", ["pricing", "modelOverrides", "disabledModels"]],
+    ["autoBackup", ["autoBackup"]],
+  ];
+  const stages = stageNames.filter(([, keys]) => keys.some(has));
+  const total = stages.length;
+  let done = 0;
+
+  const emit = (currentSection) => {
+    if (typeof onProgress === "function") {
+      onProgress({
+        done,
+        total,
+        percent: total === 0 ? 100 : Math.round((done / total) * 100),
+        currentSection,
+      });
+    }
+  };
+
+  const yieldToEventLoop = () => new Promise((resolve) => {
+    if (typeof setImmediate === "function") setImmediate(resolve);
+    else setTimeout(resolve, 0);
+  });
+
+  const finishStage = async (name, index) => {
+    done += 1;
+    emit(index + 1 < stages.length ? stages[index + 1][0] : "done");
+    await yieldToEventLoop();
+  };
+
+  if (total === 0) {
+    emit("done");
+    return await exportDb();
+  }
+  emit(stages[0][0]);
+
+  if (has("settings")) {
+    db.transaction(() => {
+      db.run(`DELETE FROM settings`);
+      db.run(`INSERT INTO settings(id, data) VALUES(1, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data`, [stringifyJson(payload.settings)]);
+    });
+    await finishStage("settings", stages.findIndex(([name]) => name === "settings"));
+  }
+
+  if (has("providerConnections") || has("providerNodes") || has("proxyPools")) {
+    db.transaction(() => {
+      if (payload.providerConnections !== undefined) {
+        db.run(`DELETE FROM providerConnections`);
+        for (const c of payload.providerConnections || []) {
+          const { id, provider, authType, name, email, priority, isActive, createdAt, updatedAt, ...rest } = c;
+          db.run(
+            `INSERT OR REPLACE INTO providerConnections(id, provider, authType, name, email, priority, isActive, data, createdAt, updatedAt) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [id, provider, authType || "oauth", name || null, email || null, priority || null, isActive === false ? 0 : 1, stringifyJson(rest), createdAt || new Date().toISOString(), updatedAt || new Date().toISOString()]
+          );
+        }
+      }
+
+      if (payload.providerNodes !== undefined) {
+        db.run(`DELETE FROM providerNodes`);
+        for (const n of payload.providerNodes || []) {
+          const { id, type, name, createdAt, updatedAt, ...rest } = n;
+          db.run(
+            `INSERT OR REPLACE INTO providerNodes(id, type, name, data, createdAt, updatedAt) VALUES(?, ?, ?, ?, ?, ?)`,
+            [id, type || null, name || null, stringifyJson(rest), createdAt || new Date().toISOString(), updatedAt || new Date().toISOString()]
+          );
+        }
+      }
+
+      if (payload.proxyPools !== undefined) {
+        db.run(`DELETE FROM proxyPools`);
+        for (const p of payload.proxyPools || []) {
+          const { id, isActive, testStatus, createdAt, updatedAt, ...rest } = p;
+          db.run(
+            `INSERT OR REPLACE INTO proxyPools(id, isActive, testStatus, data, createdAt, updatedAt) VALUES(?, ?, ?, ?, ?, ?)`,
+            [id, isActive === false ? 0 : 1, testStatus || "unknown", stringifyJson(rest), createdAt || new Date().toISOString(), updatedAt || new Date().toISOString()]
+          );
+        }
+      }
+    });
+    await finishStage("providers", stages.findIndex(([name]) => name === "providers"));
+  }
+
+  if (has("apiKeys")) {
+    db.transaction(() => {
+      db.run(`DELETE FROM apiKeys`);
+      for (const k of payload.apiKeys || []) {
+        const prev = existingApiKeys[k.id] || {};
+        const tokenLimit = k.tokenLimit !== undefined ? Number(k.tokenLimit) : (prev.tokenLimit !== undefined ? Number(prev.tokenLimit) : 0);
+        const usedTokens = k.usedTokens !== undefined ? Number(k.usedTokens) : (prev.usedTokens !== undefined ? Number(prev.usedTokens) : 0);
+        const resetInterval = k.resetInterval !== undefined ? k.resetInterval : (prev.resetInterval || "never");
+        const lastResetAt = k.lastResetAt !== undefined ? k.lastResetAt : (prev.lastResetAt || null);
+        const allowedModels = k.allowedModels !== undefined ? k.allowedModels : (prev.allowedModels || "*");
+        const rpmLimit = k.rpmLimit !== undefined ? Number(k.rpmLimit) : (prev.rpmLimit !== undefined ? Number(prev.rpmLimit) : 0);
+        const tpmLimit = k.tpmLimit !== undefined ? Number(k.tpmLimit) : (prev.tpmLimit !== undefined ? Number(prev.tpmLimit) : 0);
+        const ipWhitelist = k.ipWhitelist !== undefined ? k.ipWhitelist : (prev.ipWhitelist || "");
+        const expiresAt = k.expiresAt !== undefined ? k.expiresAt : (prev.expiresAt || null);
+        const systemPrompt = k.systemPrompt !== undefined ? k.systemPrompt : (prev.systemPrompt || "");
+        const permissions = k.permissions !== undefined ? k.permissions : (prev.permissions || "");
+        const createdBy = k.createdBy !== undefined ? k.createdBy : (prev.createdBy || "");
+
+        db.run(
+          `INSERT OR REPLACE INTO apiKeys(id, key, name, machineId, isActive, createdAt, tokenLimit, usedTokens, resetInterval, lastResetAt, allowedModels, rpmLimit, tpmLimit, ipWhitelist, expiresAt, systemPrompt, permissions, createdBy) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            k.id,
+            k.key,
+            k.name || null,
+            k.machineId || null,
+            k.isActive === false ? 0 : 1,
+            k.createdAt || new Date().toISOString(),
+            tokenLimit,
+            usedTokens,
+            resetInterval,
+            lastResetAt,
+            allowedModels,
+            rpmLimit,
+            tpmLimit,
+            ipWhitelist,
+            expiresAt,
+            systemPrompt,
+            permissions,
+            createdBy,
+          ]
+        );
+      }
+    });
+    await finishStage("apiKeys", stages.findIndex(([name]) => name === "apiKeys"));
+  }
+
+  if (has("combos")) {
+    db.transaction(() => {
+      db.run(`DELETE FROM combos`);
+      for (const c of payload.combos || []) {
+        db.run(
+          `INSERT OR REPLACE INTO combos(id, name, kind, models, createdAt, updatedAt) VALUES(?, ?, ?, ?, ?, ?)`,
+          [c.id, c.name, c.kind || null, stringifyJson(c.models || []), c.createdAt || new Date().toISOString(), c.updatedAt || new Date().toISOString()]
+        );
+      }
+    });
+    await finishStage("combos", stages.findIndex(([name]) => name === "combos"));
+  }
+
+  if (has("usageHistory") || has("usageDaily")) {
+    db.transaction(() => {
+      if (payload.usageHistory !== undefined) {
+        db.run(`DELETE FROM usageHistory`);
+        for (const h of payload.usageHistory || []) {
+          db.run(
+            `INSERT INTO usageHistory(timestamp, provider, model, connectionId, apiKey, endpoint, promptTokens, completionTokens, cost, status, tokens, meta) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              h.timestamp || new Date().toISOString(),
+              h.provider || null,
+              h.model || null,
+              h.connectionId || null,
+              h.apiKey || null,
+              h.endpoint || null,
+              h.promptTokens || 0,
+              h.completionTokens || 0,
+              h.cost || 0,
+              h.status || null,
+              h.tokens || null,
+              h.meta || null,
+            ]
+          );
+        }
+      }
+
+      if (payload.usageDaily !== undefined) {
+        db.run(`DELETE FROM usageDaily`);
+        for (const d of payload.usageDaily || []) {
+          db.run(
+            `INSERT OR REPLACE INTO usageDaily(dateKey, data) VALUES(?, ?)`,
+            [d.dateKey, typeof d.data === "string" ? d.data : stringifyJson(d.data)]
+          );
+        }
+      }
+    });
+    await finishStage("usage", stages.findIndex(([name]) => name === "usage"));
+  }
+
+  if (has("modelAliases") || has("customModels") || has("mitmAlias")) {
+    db.transaction(() => {
+      if (payload.modelAliases !== undefined) {
+        db.run(`DELETE FROM kv WHERE scope = 'modelAliases'`);
+        for (const [a, m] of Object.entries(payload.modelAliases || {})) {
+          db.run(`INSERT OR REPLACE INTO kv(scope, key, value) VALUES('modelAliases', ?, ?)`, [a, stringifyJson(m)]);
+        }
+      }
+
+      if (payload.customModels !== undefined) {
+        db.run(`DELETE FROM kv WHERE scope = 'customModels'`);
+        for (const m of payload.customModels || []) {
+          const k = `${m.providerAlias}|${m.id}|${m.type || "llm"}`;
+          db.run(`INSERT OR REPLACE INTO kv(scope, key, value) VALUES('customModels', ?, ?)`, [k, stringifyJson(m)]);
+        }
+      }
+
+      if (payload.mitmAlias !== undefined) {
+        db.run(`DELETE FROM kv WHERE scope = 'mitmAlias'`);
+        for (const [tool, mappings] of Object.entries(payload.mitmAlias || {})) {
+          db.run(`INSERT OR REPLACE INTO kv(scope, key, value) VALUES('mitmAlias', ?, ?)`, [tool, stringifyJson(mappings || {})]);
+        }
+      }
+    });
+    await finishStage("customModels", stages.findIndex(([name]) => name === "customModels"));
+  }
+
+  if (has("pricing") || has("modelOverrides") || has("disabledModels")) {
+    db.transaction(() => {
+      if (payload.pricing !== undefined) {
+        db.run(`DELETE FROM kv WHERE scope = 'pricing'`);
+        for (const [provider, models] of Object.entries(payload.pricing || {})) {
+          db.run(`INSERT OR REPLACE INTO kv(scope, key, value) VALUES('pricing', ?, ?)`, [provider, stringifyJson(models || {})]);
+        }
+      }
+
+      if (payload.modelOverrides !== undefined) {
+        db.run(`DELETE FROM kv WHERE scope = 'modelOverrides'`);
+        for (const [k, v] of Object.entries(payload.modelOverrides || {})) {
+          db.run(`INSERT OR REPLACE INTO kv(scope, key, value) VALUES('modelOverrides', ?, ?)`, [k, stringifyJson(v)]);
+        }
+      }
+
+      if (payload.disabledModels !== undefined) {
+        db.run(`DELETE FROM kv WHERE scope = 'disabledModels'`);
+        for (const [provider, ids] of Object.entries(payload.disabledModels || {})) {
+          db.run(`INSERT INTO kv(scope, key, value) VALUES('disabledModels', ?, ?) ON CONFLICT(scope, key) DO UPDATE SET value = excluded.value`, [provider, stringifyJson(ids || [])]);
+        }
+      }
+    });
+    await finishStage("pricing", stages.findIndex(([name]) => name === "pricing"));
+  }
+
+  if (has("autoBackup")) {
+    db.transaction(() => {
+      db.run(`DELETE FROM kv WHERE scope = 'autoBackup'`);
+      for (const [key, value] of Object.entries(payload.autoBackup || {})) {
+        db.run(`INSERT OR REPLACE INTO kv(scope, key, value) VALUES('autoBackup', ?, ?)`, [key, stringifyJson(value)]);
+      }
+    });
+    await finishStage("autoBackup", stages.findIndex(([name]) => name === "autoBackup"));
+  }
 
   return await exportDb();
 }

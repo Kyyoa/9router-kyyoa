@@ -16,6 +16,7 @@ import { DEFAULT_HEADROOM_URL } from "@/lib/headroom/detect";
 import { getTransform as getPxpipeTransform } from "@/lib/pxpipe/loader.js";
 import { appendPxpipeEvent } from "@/lib/pxpipe/events.js";
 import { errorResponse, unavailableResponse } from "open-sse/utils/error.js";
+import { upstreamResponseHeaders } from "open-sse/utils/upstreamHeaders.js";
 import { handleComboChat, handleFusionChat, detectRequiredCapabilities } from "open-sse/services/combo.js";
 import { augmentModelsWithCapacityAdapter, withCapacityAdapterStripping, getActiveAdapterStrategy } from "open-sse/services/capacityAdapter.js";
 import { handleBypassRequest } from "open-sse/utils/bypassHandler.js";
@@ -126,17 +127,34 @@ export async function handleChat(request, clientRawRequest = null) {
   const requiredCapabilities = detectRequiredCapabilities(body);
 
   // Check if model is a combo (has multiple models with fallback)
-  const comboModels = await getComboModels(modelStr);
+  // A studio name may itself point at a combo; resolve it first so the combo
+  // strategy applies, with a hop limit so a studio/combo cycle cannot recurse.
+  let comboEntryName = modelStr;
+  if (!modelStr.includes("/")) {
+    try {
+      const { getStudioModel } = await import("@/lib/db/repos/modelEditorRepo.js");
+      const seenStudios = new Set([modelStr]);
+      for (let hop = 0; hop < 3; hop += 1) {
+        const studioTarget = await getStudioModel(comboEntryName);
+        if (!studioTarget?.targetModel) break;
+        const next = String(studioTarget.targetModel).trim();
+        if (!next || next.includes("/") || seenStudios.has(next)) break;
+        comboEntryName = next;
+        seenStudios.add(next);
+      }
+    } catch { /* studio lookup is best-effort; fall through to the raw name */ }
+  }
+  const comboModels = await getComboModels(comboEntryName);
   if (comboModels) {
     // Check for combo-specific strategy first, fallback to global
     const comboStrategies = settings.comboStrategies || {};
-    const comboSpecificStrategy = comboStrategies[modelStr]?.fallbackStrategy;
+    const comboSpecificStrategy = comboStrategies[comboEntryName]?.fallbackStrategy;
     const comboStrategy = comboSpecificStrategy || settings.comboStrategy || "fallback";
     const augmentedModels = augmentModelsWithCapacityAdapter(comboModels, requiredCapabilities, settings);
     const adapterAdded = augmentedModels.filter((m) => !comboModels.includes(m));
 
     if (comboStrategy === "fusion") {
-      log.info("CHAT", `Combo "${modelStr}" with ${comboModels.length} models (strategy: fusion)`);
+      log.info("CHAT", `Combo "${comboEntryName}" with ${comboModels.length} models (strategy: fusion)`);
       return handleFusionChat({
         body,
         models: comboModels,
@@ -149,14 +167,14 @@ export async function handleChat(request, clientRawRequest = null) {
           return handleSingleModelChat(b, m, cleanRawReq, request, apiKey);
         },
         log,
-        comboName: modelStr,
-        judgeModel: comboStrategies[modelStr]?.judgeModel,
-        tuning: comboStrategies[modelStr]?.fusionTuning,
+        comboName: comboEntryName,
+        judgeModel: comboStrategies[comboEntryName]?.judgeModel,
+        tuning: comboStrategies[comboEntryName]?.fusionTuning,
       });
     }
 
     const comboStickyLimit = settings.comboStickyRoundRobinLimit;
-    log.info("CHAT", `Combo "${modelStr}" with ${augmentedModels.length} models (strategy: ${comboStrategy}, sticky: ${comboStickyLimit})`);
+    log.info("CHAT", `Combo "${comboEntryName}" with ${augmentedModels.length} models (strategy: ${comboStrategy}, sticky: ${comboStickyLimit})`);
     return handleComboChat({
       body,
       models: augmentedModels,
@@ -165,7 +183,7 @@ export async function handleChat(request, clientRawRequest = null) {
         adapterAdded
       ),
       log,
-      comboName: modelStr,
+      comboName: comboEntryName,
       comboStrategy,
       comboStickyLimit
     });
@@ -199,21 +217,41 @@ export async function handleChat(request, clientRawRequest = null) {
 async function handleSingleModelChat(body, modelStr, clientRawRequest = null, request = null, apiKey = null) {
   const modelInfo = await getModelInfo(modelStr);
 
-  // If provider is null, this might be a combo name - check and handle
+  // If provider is null, this might be a combo name - check and handle.
+  // A studio name may also resolve here: getModelInfo answers a studio that
+  // points at a combo with the combo name in `model`, so use it as the entry.
   if (!modelInfo.provider) {
-    const comboModels = await getComboModels(modelStr);
+    const comboEntryName = (!modelStr.includes("/") && modelInfo.model && modelInfo.model !== modelStr)
+      ? modelInfo.model
+      : modelStr;
+    const comboModels = await getComboModels(comboEntryName);
     if (comboModels) {
+      // A studio calling into a combo may carry its own system prompt; it is
+      // applied here because this branch returns before the override block.
+      try {
+        const { getStudioModel } = await import("@/lib/db/repos/modelEditorRepo.js");
+        const entryStudio = comboEntryName !== modelStr ? await getStudioModel(modelStr) : null;
+        if (entryStudio?.systemPrompt) {
+          if (Array.isArray(body.messages)) {
+            body.messages.unshift({ role: "system", content: entryStudio.systemPrompt });
+          } else if (typeof body.system === "string") {
+            body.system = entryStudio.systemPrompt + "\n\n" + body.system;
+          } else {
+            body.system = entryStudio.systemPrompt;
+          }
+        }
+      } catch { /* fail open */ }
       const chatSettings = await getSettings();
       // Check for combo-specific strategy first, fallback to global
       const comboStrategies = chatSettings.comboStrategies || {};
-      const comboSpecificStrategy = comboStrategies[modelStr]?.fallbackStrategy;
+      const comboSpecificStrategy = comboStrategies[comboEntryName]?.fallbackStrategy;
       const comboStrategy = comboSpecificStrategy || chatSettings.comboStrategy || "fallback";
       const requiredCapabilities = detectRequiredCapabilities(body);
       const augmentedModels = augmentModelsWithCapacityAdapter(comboModels, requiredCapabilities, chatSettings);
       const adapterAdded = augmentedModels.filter((m) => !comboModels.includes(m));
 
       if (comboStrategy === "fusion") {
-        log.info("CHAT", `Combo "${modelStr}" with ${comboModels.length} models (strategy: fusion)`);
+        log.info("CHAT", `Combo "${comboEntryName}" with ${comboModels.length} models (strategy: fusion)`);
         return handleFusionChat({
           body,
           models: comboModels,
@@ -226,14 +264,14 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
             return handleSingleModelChat(b, m, cleanRawReq, request, apiKey);
           },
           log,
-          comboName: modelStr,
-          judgeModel: comboStrategies[modelStr]?.judgeModel,
-          tuning: comboStrategies[modelStr]?.fusionTuning,
+          comboName: comboEntryName,
+          judgeModel: comboStrategies[comboEntryName]?.judgeModel,
+          tuning: comboStrategies[comboEntryName]?.fusionTuning,
         });
       }
 
       const comboStickyLimit = chatSettings.comboStickyRoundRobinLimit;
-      log.info("CHAT", `Combo "${modelStr}" with ${augmentedModels.length} models (strategy: ${comboStrategy}, sticky: ${comboStickyLimit})`);
+      log.info("CHAT", `Combo "${comboEntryName}" with ${augmentedModels.length} models (strategy: ${comboStrategy}, sticky: ${comboStickyLimit})`);
       return handleComboChat({
         body,
         models: augmentedModels,
@@ -242,7 +280,7 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
           adapterAdded
         ),
         log,
-        comboName: modelStr,
+        comboName: comboEntryName,
         comboStrategy,
         comboStickyLimit
       });
@@ -312,6 +350,7 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
   const excludeConnectionIds = new Set();
   let lastError = null;
   let lastStatus = null;
+  let lastHeaders = null;
 
   while (true) {
     const credentials = await getProviderCredentials(provider, excludeConnectionIds, model);
@@ -329,7 +368,7 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
         return errorResponse(HTTP_STATUS.NOT_FOUND, `No credentials are serving ${calledModel} right now`);
       }
       log.warn("CHAT", "No more accounts available", { provider });
-      return errorResponse(lastStatus || HTTP_STATUS.SERVICE_UNAVAILABLE, lastError || "All accounts unavailable");
+      return errorResponse(lastStatus || HTTP_STATUS.SERVICE_UNAVAILABLE, lastError || "All accounts unavailable", lastHeaders);
     }
 
     // Account selection shown in the unified "▶" line (acc:...)
@@ -378,6 +417,10 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
       pxpipeTransform: chatSettings.pxpipeEnabled ? await getPxpipeTransform() : null,
       onPxpipeEvent: appendPxpipeEvent,
       providerThinking,
+      // Undefined means on: the fallback is opt-out so a malformed tool payload
+      // never reaches the caller, and `toolCallFallback: false` restores the
+      // previous pass-the-error-through behaviour.
+      toolCallFallbackEnabled: chatSettings.toolCallFallback !== false,
       // Detect source format by endpoint + body
       sourceFormatOverride: request?.url ? detectFormatByEndpoint(new URL(request.url).pathname, body) : null,
       onCredentialsRefreshed: async (newCreds) => {
@@ -418,6 +461,7 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
       excludeConnectionIds.add(credentials.connectionId);
       lastError = result.error;
       lastStatus = result.status;
+      lastHeaders = upstreamResponseHeaders(result.response?.headers);
       continue;
     }
 

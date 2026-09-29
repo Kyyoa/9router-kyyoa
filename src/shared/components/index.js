@@ -4,7 +4,7 @@ export { default as Input } from "./Input";
 export { default as Select } from "./Select";
 export { default as Card } from "./Card";
 export { default as Modal, ConfirmModal } from "./Modal";
-export { default as Loading, Spinner, PageLoading, Skeleton, CardSkeleton } from "./Loading";
+export { default as Loading, Spinner, PageLoading, CenterLoading, BusyOverlay, Skeleton, CardSkeleton } from "./Loading";
 export { default as Avatar } from "./Avatar";
 export { default as Badge } from "./Badge";
 export { default as Toggle } from "./Toggle";
@@ -27,6 +27,7 @@ export { default as KiroAuthModal } from "./KiroAuthModal";
 export { default as KiroOAuthWrapper } from "./KiroOAuthWrapper";
 export { default as KiroSocialOAuthModal } from "./KiroSocialOAuthModal";
 export { default as CursorAuthModal } from "./CursorAuthModal";
+export { default as ZedAuthModal } from "./ZedAuthModal";
 export { default as XiaomiMimoAuthModal } from "./XiaomiMimoAuthModal";
 export { default as IFlowCookieModal } from "./IFlowCookieModal";
 export { default as GitLabAuthModal } from "./GitLabAuthModal";
@@ -38,6 +39,7 @@ export { default as Tooltip } from "./Tooltip";
 export { default as ProviderInfoCard } from "./ProviderInfoCard";
 export { default as CapacityBadges } from "./CapacityBadges";
 export { default as WelcomeModal } from "./WelcomeModal";
+export { default as UpdateBanner } from "./UpdateBanner";
 export { default as DownloadBackupModal } from "./DownloadBackupModal";
 
 // Layouts

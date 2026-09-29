@@ -6,6 +6,7 @@ import Modal from "./Modal";
 import Button from "./Button";
 import Input from "./Input";
 import Badge from "./Badge";
+import { CenterLoading } from "./Loading";
 
 function formatBytes(bytes) {
   if (!bytes || bytes === 0) return "0 B";
@@ -104,7 +105,10 @@ export default function DownloadBackupModal({ isOpen, onClose, onDownload, loadi
         </div>
       }
     >
-      <div className="space-y-4">
+      <div className="relative space-y-4">
+        {loading ? (
+          <CenterLoading fixed={false} message="Preparing backup..." />
+        ) : null}
         <Input
           label="Password (if set)"
           type="password"

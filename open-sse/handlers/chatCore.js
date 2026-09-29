@@ -9,6 +9,7 @@ import { createRequestLogger } from "../utils/requestLogger.js";
 import { getModelTargetFormat, getModelSupportedFormats, getModelStrip, getModelUpstreamId, getModelType, PROVIDER_ID_TO_ALIAS } from "../config/providerModels.js";
 import { PROVIDERS } from "../config/providers.js";
 import { createErrorResult, parseUpstreamError, formatProviderError } from "../utils/error.js";
+import { upstreamResponseHeaders } from "../utils/upstreamHeaders.js";
 import { HTTP_STATUS, TOKEN_SAVER_HEADER } from "../config/runtimeConfig.js";
 import { handleBypassRequest } from "../utils/bypassHandler.js";
 import { trackPendingRequest, appendRequestLog, saveRequestDetail } from "@/lib/usageDb.js";
@@ -40,6 +41,8 @@ import { getCapabilitiesForModel } from "../providers/capabilities.js";
 import { stripUnsupportedModalities } from "../translator/concerns/modality.js";
 import { prefetchRemoteImages } from "../translator/concerns/prefetch.js";
 import { defaultClaudeToolType, shouldDefaultClaudeToolType } from "../translator/concerns/toolCall.js";
+import { repair as repairToolPayload, degrade as degradeToolPayload, isToolCallRejection, TOOL_FALLBACK_MAX_LEVEL } from "../translator/concerns/toolCallFallback.js";
+import { rescueRequest } from "../translator/concerns/toolCallRescue.js";
 import { resolveSessionId } from "../utils/sessionManager.js";
 import { applyCustomPlugins } from "@/lib/plugins/customPluginsRuntime.js";
 
@@ -70,7 +73,7 @@ export function stripContinuityFields(body) {
   return body;
 }
 
-export async function handleChatCore({ body, modelInfo, credentials, log, onCredentialsRefreshed, onRequestSuccess, onDisconnect, clientRawRequest, connectionId, userAgent, apiKey, ccFilterNaming, rtkEnabled, contextPruningEnabled, maxMessagesLimit, semanticCacheEnabled, headroomEnabled, headroomUrl, headroomCompressUserMessages, headroomTimeoutMs, cavemanEnabled, cavemanLevel, ponytailEnabled, ponytailLevel, pxpipeEnabled, pxpipeMinChars, pxpipeTimeoutMs, pxpipeTransform, onPxpipeEvent, sourceFormatOverride, providerThinking, requestedModel }) {
+export async function handleChatCore({ body, modelInfo, credentials, log, onCredentialsRefreshed, onRequestSuccess, onDisconnect, clientRawRequest, connectionId, userAgent, apiKey, ccFilterNaming, rtkEnabled, contextPruningEnabled, maxMessagesLimit, semanticCacheEnabled, headroomEnabled, headroomUrl, headroomCompressUserMessages, headroomTimeoutMs, cavemanEnabled, cavemanLevel, ponytailEnabled, ponytailLevel, pxpipeEnabled, pxpipeMinChars, pxpipeTimeoutMs, pxpipeTransform, onPxpipeEvent, sourceFormatOverride, providerThinking, requestedModel, toolCallFallbackEnabled = true }) {
   const { provider, model } = modelInfo;
   const requestStartTime = Date.now();
   // Stable per-session color so all lines of one CLI conversation share a tag
@@ -304,6 +307,23 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
     translatedBody.tools = defaultClaudeToolType(translatedBody.tools);
   }
 
+  // Repair malformed tool payloads before dispatch: truncated JSON arguments, tool
+  // results nothing asked for, a tool_choice naming a tool that is not in the array.
+  // Any of those is a deterministic 400, and inside a combo it would burn every
+  // member before the first one could answer. Fail-open — unchanged body on error.
+  if (toolCallFallbackEnabled && Array.isArray(translatedBody.tools) && translatedBody.tools.length > 0) {
+    repairToolPayload(translatedBody);
+    // A call the client already rejected stays in the history it sends back on
+    // the next turn, so repairing only the outbound body leaves the same broken
+    // call being re-validated and rejected every turn after. Renaming it back to
+    // the case the request declared and filling the arguments it lost is what
+    // lets the turn continue.
+    const rescued = rescueRequest(translatedBody);
+    if (rescued.renamed || rescued.recovered || rescued.dropped) {
+      log?.debug?.("TOOLRESCUE", `${rescued.renamed} renamed, ${rescued.recovered} recovered, ${rescued.dropped} dropped (history)`);
+    }
+  }
+
   // RTK: compress tool_result content. Skipped when already done pre-translate.
   const rtkStats = preTranslateRtk || compressMessages(translatedBody, tokenSaverEnabled && rtkEnabled);
 
@@ -511,28 +531,75 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
 
   // Provider returned error
   if (!providerResponse.ok) {
-    trackPendingRequest(trackedModel, provider, connectionId, false, true);
-    const { statusCode, message, resetsAtMs } = await parseUpstreamError(providerResponse, executor);
-    appendRequestLog({ model: trackedModel, provider, connectionId, status: `FAILED ${statusCode}` }).catch(() => { });
-    saveRequestDetail(buildRequestDetail({
-      provider, model, connectionId, requestedModel,
-      latency: { ttft: 0, total: Date.now() - requestStartTime },
-      tokens: { prompt_tokens: 0, completion_tokens: 0 },
-      request: extractRequestConfig(body, stream),
-      providerRequest: finalBody || translatedBody || null,
-      response: { error: message, status: statusCode, thinking: null },
-      pxpipe: pxpipeSummary,
-      status: "error"
-    })).catch(() => { });
-    saveFailedUsage({ provider, model, requestedModel, connectionId, apiKey, endpoint: clientRawRequest?.endpoint, statusCode });
+    const firstFailure = await parseUpstreamError(providerResponse, executor);
+    let toolFallbackRecovered = false;
 
-    const errMsg = formatProviderError(new Error(message), provider, model, statusCode);
-    if (log?.errorLine) {
-      const urlStr = providerUrl ? `\n    URL: ${providerUrl}` : "";
-      log.errorLine(reqTag, "✗", `ERROR ${statusCode} · ${provider}/${model} · ${Date.now() - requestStartTime}ms${urlStr}\n    ${errMsg}`);
+    // Tool fallback: a provider that refuses the tool payload outright would
+    // otherwise hand the caller a tool error, and inside a combo it would spend
+    // the whole chain on the same malformed shape. Re-dispatch with the tool
+    // machinery relaxed one step at a time, stopping at the first level the
+    // provider accepts. Only for rejections that actually name tools — a context
+    // overflow or a policy refusal must still reach the caller untouched.
+    if (toolCallFallbackEnabled && Array.isArray(translatedBody.tools) && translatedBody.tools.length > 0
+        && isToolCallRejection(firstFailure.statusCode, firstFailure.message)) {
+      for (let level = 1; level <= TOOL_FALLBACK_MAX_LEVEL; level++) {
+        const fallbackBody = degradeToolPayload(translatedBody, level);
+        if (!fallbackBody) break;
+        try {
+          const attempt = await executor.execute({
+            model,
+            body: fallbackBody,
+            stream,
+            credentials,
+            providerSessionId: sessionSeed,
+            clientTool,
+            signal: streamController.signal,
+            log,
+            proxyOptions,
+          });
+          if (attempt.response.ok) {
+            providerResponse = attempt.response;
+            providerUrl = attempt.url;
+            finalBody = attempt.transformedBody;
+            providerResponseFormat = attempt.responseFormat || targetFormat;
+            const renamed = takeRenamedToolNames(fallbackBody);
+            if (renamed?.size) toolNameMap = new Map([...(toolNameMap || []), ...renamed]);
+            reqLogger.logTargetRequest(providerUrl, attempt.headers, finalBody);
+            toolFallbackRecovered = true;
+            log?.info?.("TOOLFALLBACK", `recovered at level ${level} · ${provider}/${model} · after ${firstFailure.statusCode}`);
+            break;
+          }
+          log?.debug?.("TOOLFALLBACK", `level ${level} rejected · ${provider}/${model} · ${attempt.response.status}`);
+        } catch (e) {
+          log?.debug?.("TOOLFALLBACK", `level ${level} threw · ${provider}/${model} · ${e.message}`);
+        }
+      }
     }
-    reqLogger.logError(new Error(message), finalBody || translatedBody);
-    return createErrorResult(statusCode, errMsg, resetsAtMs);
+
+    if (!toolFallbackRecovered) {
+      trackPendingRequest(trackedModel, provider, connectionId, false, true);
+      const { statusCode, message, resetsAtMs } = firstFailure;
+      appendRequestLog({ model: trackedModel, provider, connectionId, status: `FAILED ${statusCode}` }).catch(() => { });
+      saveRequestDetail(buildRequestDetail({
+        provider, model, connectionId, requestedModel,
+        latency: { ttft: 0, total: Date.now() - requestStartTime },
+        tokens: { prompt_tokens: 0, completion_tokens: 0 },
+        request: extractRequestConfig(body, stream),
+        providerRequest: finalBody || translatedBody || null,
+        response: { error: message, status: statusCode, thinking: null },
+        pxpipe: pxpipeSummary,
+        status: "error"
+      })).catch(() => { });
+      saveFailedUsage({ provider, model, requestedModel, connectionId, apiKey, endpoint: clientRawRequest?.endpoint, statusCode });
+
+      const errMsg = formatProviderError(new Error(message), provider, model, statusCode);
+      if (log?.errorLine) {
+        const urlStr = providerUrl ? `\n    URL: ${providerUrl}` : "";
+        log.errorLine(reqTag, "✗", `ERROR ${statusCode} · ${provider}/${model} · ${Date.now() - requestStartTime}ms${urlStr}\n    ${errMsg}`);
+      }
+      reqLogger.logError(new Error(message), finalBody || translatedBody);
+      return createErrorResult(statusCode, errMsg, resetsAtMs, upstreamResponseHeaders(providerResponse.headers));
+    }
   }
 
   const sharedCtx = { provider, model, body, stream, translatedBody, finalBody, requestStartTime, connectionId, apiKey, requestedModel, clientRawRequest, onRequestSuccess, pxpipe: pxpipeSummary, reqTag, log };

@@ -65,6 +65,56 @@ function BackupCountdown({ target, onExpire, showDate = false }) {
   );
 }
 
+// Fallback busy indicator shown while the centralized overlay from agent A
+// (src/shared/components/Loading.js) is not available yet. Deliberately
+// non-blocking: pointer events pass through so the page stays usable during
+// background work.
+function BackupBusyOverlay({ info }) {
+  if (!info) return null;
+  const percent = typeof info.progress === "number" && Number.isFinite(info.progress)
+    ? Math.max(0, Math.min(100, Math.round(info.progress <= 1 ? info.progress * 100 : info.progress)))
+    : null;
+  return (
+    <div className="pointer-events-none fixed inset-0 z-[70] flex items-start justify-center p-4 pt-16" role="status" aria-live="polite">
+      <div className="w-full max-w-sm rounded-xl border border-border bg-bg p-4 shadow-lg">
+        <div className="flex items-center gap-3">
+          <span className="material-symbols-outlined animate-spin text-brand-500">progress_activity</span>
+          <div className="min-w-0">
+            <p className="text-sm font-medium">{info.title || "Working"}</p>
+            {info.message && <p className="truncate text-xs text-text-muted">{info.message}</p>}
+          </div>
+          {percent !== null && <span className="ml-auto shrink-0 text-xs text-text-muted">{`${percent}%`}</span>}
+        </div>
+        {info.section && <p className="mt-2 text-xs text-text-muted">{info.section}</p>}
+        {percent !== null && (
+          <div className="mt-2 h-2 overflow-hidden rounded-full bg-surface-2">
+            <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${percent}%` }} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Candidate export names for the centralized overlay built by agent A.
+// Resolved through dynamic import() so this page never crashes when that
+// component does not exist yet.
+const OVERLAY_CANDIDATES = ["CenterLoading", "LoadingOverlay", "BusyOverlay", "GlobalLoading", "ProgressOverlay", "BackupProgressOverlay"];
+
+function resolveOverlayComponent(mod) {
+  if (!mod) return null;
+  for (const name of OVERLAY_CANDIDATES) {
+    if (typeof mod[name] === "function") return mod[name];
+  }
+  return null;
+}
+
+// Background import-job endpoint built by agent B. POST starts a job from the
+// same JSON body as the direct import and answers { jobId }; GET
+// <endpoint>/<jobId> answers { status, progress, section, error }. A 404/405
+// means the endpoint does not exist yet and the caller falls back to POST /api/settings/database.
+const IMPORT_JOB_ENDPOINT = "/api/settings/database/jobs";
+
 export default function ProfilePage() {
   const [locale, setLocale] = useState(() => getLocaleFromCookie());
   const [langOpen, setLangOpen] = useState(false);
@@ -127,6 +177,25 @@ export default function ProfilePage() {
   const certFileRef = useRef(null);
 
   const importFileRef = useRef(null);
+  // Centralized busy overlay (agent A). `busy` drives the lightweight local
+  // fallback UI; `OverlayComp` holds the dynamically loaded overlay component
+  // once agent A lands it, otherwise stays null and the fallback is used.
+  const [busy, setBusy] = useState(null);
+  const [OverlayComp, setOverlayComp] = useState(null);
+  const overlayTriedRef = useRef(false);
+
+  const ensureOverlay = async () => {
+    if (OverlayComp || overlayTriedRef.current) return OverlayComp;
+    overlayTriedRef.current = true;
+    try {
+      const mod = await import("@/shared/components/Loading");
+      const Comp = resolveOverlayComponent(mod);
+      if (Comp) setOverlayComp(() => Comp);
+      return Comp;
+    } catch {
+      return null;
+    }
+  };
   const [proxyForm, setProxyForm] = useState({
     outboundProxyEnabled: false,
     outboundProxyUrl: "",
@@ -743,6 +812,8 @@ export default function ProfilePage() {
   const saveAutoBackup = async () => {
   setTgLoading(true);
   setTgStatus({ type: "", message: "" });
+  setBusy({ title: "Saving backup configuration", message: "Saving automatic backup settings" });
+  ensureOverlay().catch(() => null);
   try {
   const payload = {
   enabled: tgForm.enabled,
@@ -773,6 +844,7 @@ export default function ProfilePage() {
   setTgStatus({ type: "error", message: "An error occurred while saving the configuration" });
   } finally {
   setTgLoading(false);
+  setBusy(null);
   }
   };
 
@@ -783,6 +855,8 @@ export default function ProfilePage() {
   const runTestBackup = async (password) => {
   setTgLoading(true);
   setTgStatus({ type: "", message: "" });
+  setBusy({ title: "Sending test backup", message: "Uploading backup to the configured channel" });
+  ensureOverlay().catch(() => null);
   try {
   const res = await fetch("/api/settings/auto-backup", {
   method: "POST",
@@ -800,12 +874,15 @@ export default function ProfilePage() {
   setTgStatus({ type: "error", message: "An error occurred while sending the test backup" });
   } finally {
   setTgLoading(false);
+  setBusy(null);
   }
   };
 
   const handleExportDatabase = async (password, selectedSections = []) => {
     setDbLoading(true);
     setDbStatus({ type: "", message: "" });
+    setBusy({ title: "Preparing backup", message: "Exporting database" });
+    ensureOverlay().catch(() => null);
     try {
       const sectionsQuery = selectedSections && selectedSections.length > 0
         ? `?sections=${selectedSections.join(",")}`
@@ -837,6 +914,7 @@ export default function ProfilePage() {
       setDbStatus({ type: "error", message: err.message || "Failed to export database" });
     } finally {
       setDbLoading(false);
+      setBusy(null);
     }
   };
 
@@ -849,23 +927,102 @@ export default function ProfilePage() {
     setDbAuth({ open: true, mode: "import", password: "" });
   };
 
+  // Poll a background import job started by agent B. Resolves when the job
+  // reports done/failed, rejects on timeout or job failure. Non-blocking: the
+  // page stays interactive while polling, progress is mirrored to the overlay.
+  const pollImportJob = async (jobId) => {
+    const startedAt = Date.now();
+    const timeoutMs = 5 * 60 * 1000;
+    for (;;) {
+      await new Promise((resolve) => setTimeout(resolve, 750));
+      const res = await fetch(`${IMPORT_JOB_ENDPOINT}/${encodeURIComponent(jobId)}`);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to check import status");
+      }
+      const data = await res.json().catch(() => ({}));
+      const status = String(data.status || "").toLowerCase();
+      if (typeof data.progress !== "undefined" || data.section || data.message) {
+        setBusy({
+          title: "Importing database",
+          message: data.message || "Import running in the background",
+          section: data.section || "",
+          progress: data.progress,
+        });
+      }
+      if (status === "done" || status === "completed" || status === "success") return;
+      if (status === "failed" || status === "error") {
+        throw new Error(data.error || "Failed to import database");
+      }
+      if (Date.now() - startedAt > timeoutMs) {
+        throw new Error("Import is taking too long, please check the result and try again");
+      }
+    }
+  };
+
+  // Direct (synchronous) import, used as the fallback when the background
+  // job endpoint from agent B is not available yet.
+  const runDirectImport = async (body) => {
+    const res = await fetch("/api/settings/database", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || "Failed to import database");
+    }
+  };
+
   const runImportDatabase = async (password) => {
     const file = pendingImportRef.current;
     if (!file) return;
     setDbLoading(true);
+    setDbStatus({ type: "", message: "" });
+    setBusy({ title: "Importing database", message: "Reading backup file" });
+    ensureOverlay().catch(() => null);
     try {
       const raw = await file.text();
       const payload = JSON.parse(raw);
+      const body = { ...payload, password };
 
-      const res = await fetch("/api/settings/database", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...payload, password }),
-      });
-
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to import database");
+      // Prefer the background job flow (agent B); fall back to the direct
+      // POST when the job endpoint answers 404/405 (not built yet).
+      let usedJob = false;
+      try {
+        const jobRes = await fetch(IMPORT_JOB_ENDPOINT, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (jobRes.status === 404 || jobRes.status === 405) {
+          await runDirectImport(body);
+        } else {
+          const jobData = await jobRes.json().catch(() => ({}));
+          if (!jobRes.ok) {
+            throw new Error(jobData.error || "Failed to import database");
+          }
+          if (jobData && jobData.jobId) {
+            usedJob = true;
+            setBusy({
+              title: "Importing database",
+              message: "Import running in the background",
+              section: jobData.section || "",
+              progress: jobData.progress,
+            });
+            await pollImportJob(jobData.jobId);
+          } else {
+            await runDirectImport(body);
+          }
+        }
+      } catch (err) {
+        // Network-level failure of the job endpoint (not a job failure) also
+        // falls back to the direct import instead of failing the restore.
+        if (!usedJob && (err instanceof TypeError)) {
+          await runDirectImport(body);
+        } else {
+          throw err;
+        }
       }
 
       await reloadSettings();
@@ -875,6 +1032,7 @@ export default function ProfilePage() {
     } finally {
       pendingImportRef.current = null;
       setDbLoading(false);
+      setBusy(null);
     }
   };
 
@@ -1893,6 +2051,23 @@ export default function ProfilePage() {
         onDownload={(password, sections) => handleExportDatabase(password, sections)}
         loading={dbLoading}
       />
+
+      {/* Centralized busy overlay (agent A) with local fallback. The fallback
+          is pointer-events-none so the page stays usable while a background
+          job runs; the centralized overlay controls its own blocking.
+          Agent A interface: CenterLoading/BusyOverlay take { message,
+          progress (0-100 or null), fixed }. Extra props below are tolerated
+          because the resolve step only checks typeof function. */}
+      {OverlayComp && busy ? (
+        <OverlayComp
+          message={busy.section ? `${busy.title || ""} - ${busy.section}`.replace(/^ - /, "") : (busy.message || busy.title)}
+          progress={typeof busy.progress === "number" && Number.isFinite(busy.progress)
+            ? (busy.progress <= 1 ? Math.round(busy.progress * 100) : Math.round(busy.progress))
+            : null}
+        />
+      ) : (
+        <BackupBusyOverlay info={busy} />
+      )}
 
       <Modal
         isOpen={dbAuth.open}

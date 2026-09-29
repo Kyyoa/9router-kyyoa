@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { Card, Button, Modal, Input, ModelSelectModal } from "@/shared/components";
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
 import { useModelCaps } from "@/shared/hooks/useModelCaps";
+import { findStudioCycle, describeStudioCycle } from "@/shared/utils/studioComboGuard";
 
 const NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$/;
 
@@ -171,6 +172,11 @@ function ModelStudioContent() {
                 <span className="px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/5 text-text-muted font-mono truncate max-w-full">
                   {model.targetLabel || model.targetModel}
                 </span>
+                {!String(model.targetModel || "").includes("/") && (
+                  <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
+                    combo
+                  </span>
+                )}
                 {model.contextWindow > 0 && (
                   <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
                     {formatTokens(model.contextWindow)} context
@@ -242,6 +248,21 @@ function StudioFormModal({
   const [callName, setCallName] = useState(editing?.callName || "");
   const [displayName, setDisplayName] = useState(editing?.displayName || "");
   const [targetModel, setTargetModel] = useState(editing?.targetModel || "");
+  const [combos, setCombos] = useState([]);
+  const [siblings, setSiblings] = useState([]);
+
+  useEffect(() => {
+    let alive = true;
+    Promise.all([
+      fetch("/api/combos").then((r) => (r.ok ? r.json() : { combos: [] })).catch(() => ({ combos: [] })),
+      fetch("/api/model-editor").then((r) => (r.ok ? r.json() : { models: [] })).catch(() => ({ models: [] })),
+    ]).then(([comboData, studioData]) => {
+      if (!alive) return;
+      setCombos(comboData.combos || []);
+      setSiblings(studioData.models || []);
+    });
+    return () => { alive = false; };
+  }, []);
   const [contextWindow, setContextWindow] = useState(
     editing?.contextWindow ? String(editing.contextWindow) : ""
   );
@@ -266,6 +287,25 @@ function StudioFormModal({
   );
 
   const targetCaps = useMemo(() => (targetModel ? getCaps(targetModel) : null), [targetModel, getCaps]);
+  // Client-side precheck mirroring the server guard: warn before saving when
+  // the picked combo leads back to this model. The server still decides.
+  const cycleError = useMemo(() => {
+    const name = callName.trim();
+    const target = targetModel.trim();
+    if (!name || !target || target.includes("/")) return "";
+    if (!combos.some((c) => c.name === target)) return "";
+    const chain = findStudioCycle({
+      callName: name,
+      comboName: target,
+      combosByName: new Map(combos.map((c) => [c.name, c.models || []])),
+      studioTargets: new Map(
+        siblings.filter((m) => m.callName !== name && m.callName !== editing?.callName).map((m) => [m.callName, m.targetModel])
+      ),
+      extraSelfNames: editing?.callName && editing.callName !== name ? [editing.callName] : [],
+    });
+    return chain ? describeStudioCycle(chain) : "";
+  }, [callName, targetModel, combos, siblings, editing]);
+
   const nameError = useMemo(() => {
     if (!callName) return "";
     if (callName.includes("/")) return "Use a name without \"/\" — it is the model ID clients send.";
@@ -282,7 +322,7 @@ function StudioFormModal({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!callName.trim() || !targetModel || nameError) return;
+    if (!callName.trim() || !targetModel || nameError || cycleError) return;
     setSaving(true);
     try {
       const res = await fetch("/api/model-editor", {
@@ -364,6 +404,9 @@ function StudioFormModal({
             <p className="text-[11px] text-text-muted">
               Any model you have connected — built-in, custom provider or combo.
             </p>
+            {cycleError && (
+              <p className="text-[11px] text-red-500 mt-1">{cycleError}</p>
+            )}
           </div>
 
           <div>
@@ -491,7 +534,7 @@ function StudioFormModal({
             <Button type="button" variant="secondary" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit" disabled={!callName.trim() || !targetModel || !!nameError || saving}>
+            <Button type="submit" disabled={!callName.trim() || !targetModel || !!nameError || !!cycleError || saving}>
               {saving ? "Saving..." : editing ? "Save" : "Create"}
             </Button>
           </div>

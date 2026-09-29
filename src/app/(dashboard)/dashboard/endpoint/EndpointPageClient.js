@@ -40,10 +40,14 @@ const PERMISSION_OPTIONS = [
   { key: "manageApiKeys", label: "Create, edit and delete API keys", icon: "key", desc: "Lets this key manage other API keys" },
   { key: "manageModels", label: "Create, edit and delete models", icon: "auto_awesome", desc: "Custom models, aliases and combos" },
   { key: "manageProviders", label: "Create, edit and delete providers", icon: "dns", desc: "Provider connections and API keys" },
+  { key: "manageTools", label: "Use CLI tools and token saver", icon: "terminal", desc: "Request transformers and the CLI install page" },
+  { key: "manageAdvanced", label: "Open console log, translator and proxy pools", icon: "terminal", desc: "Debugging and network plumbing" },
+  { key: "managePlugins", label: "Manage custom plugins", icon: "widgets", desc: "Plugins that change how requests are handled" },
+  { key: "manageMediaProviders", label: "Manage media providers", icon: "perm_media", desc: "Image, audio and embedding connections" },
   { key: "viewUsage", label: "View usage", icon: "bar_chart", desc: "Usage numbers for this key only" },
 ];
 
-const EMPTY_PERMISSIONS = { manageApiKeys: false, manageModels: false, manageProviders: false, viewUsage: true };
+const EMPTY_PERMISSIONS = { manageApiKeys: false, manageModels: false, manageProviders: false, manageTools: false, manageAdvanced: false, managePlugins: false, manageMediaProviders: false, viewUsage: true };
 
 function PermissionsEditor({ value, onChange, allowed }) {
   return (
@@ -145,7 +149,7 @@ export default function APIPageClient({ machineId }) {
   const [newKeyPermissions, setNewKeyPermissions] = useState({ ...EMPTY_PERMISSIONS });
   const [editPermissions, setEditPermissions] = useState({ ...EMPTY_PERMISSIONS });
   const isApiKeyUser = authStatus?.role === "apikey";
-  const creatorPermissions = authStatus?.permissions || { manageApiKeys: true, manageModels: true, manageProviders: true, viewUsage: true };
+  const creatorPermissions = authStatus?.permissions || { ...EMPTY_PERMISSIONS, manageApiKeys: true, manageModels: true, manageProviders: true, manageTools: true, manageAdvanced: true, managePlugins: true, manageMediaProviders: true };
   const creatorTokenLimit = authStatus?.tokenLimit || 0;
   const creatorAllowedModels = authStatus?.allowedModels || "*";
   // A key that is itself limited to certain models can only hand those same models on.

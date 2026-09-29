@@ -591,11 +591,12 @@ export function prepareClaudeRequest(body, provider = null, apiKey = null, conne
         .filter(tool => {
           const t = tool?.type;
           if (!t || t === "function") return true;
-          if (hasWhitelist) return supportedTypes.includes(t);
           // A tool carrying a function payload is a client function tool even
           // when tagged with a newer API's `type` (e.g. Responses "custom");
           // keep it so the map below folds it into Anthropic shape.
-          return !!tool?.function;
+          if (tool?.function) return true;
+          if (hasWhitelist) return supportedTypes.includes(t);
+          return false;
         })
         .map(tool => {
           if (tool.function) {

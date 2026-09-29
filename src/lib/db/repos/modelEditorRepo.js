@@ -40,8 +40,12 @@ function store() {
 function toModel(callName, value) {
   if (!value || typeof value !== "object") return null;
   const target = typeof value.targetModel === "string" ? value.targetModel.trim() : "";
-  if (!target || !target.includes("/")) return null;
+  if (!target) return null;
   const firstSlash = target.indexOf("/");
+  // A bare name is a combo target (validated at the API layer). Anything else
+  // must stay a provider/model pair so old records keep resolving as before.
+  if (firstSlash < 0) return toComboTargetModel(callName, value, target);
+  if (firstSlash === 0 || firstSlash === target.length - 1) return null;
   return {
   callName,
   displayName: (value.displayName || "").trim() || callName,
@@ -49,6 +53,28 @@ function toModel(callName, value) {
    targetLabel: (value.targetLabel || value.targetModel || "").trim() || target,
   provider: target.slice(0, firstSlash),
   model: target.slice(firstSlash + 1),
+  contextWindow: Number(value.contextWindow) || 0,
+  systemPrompt: typeof value.systemPrompt === "string" ? value.systemPrompt : "",
+  temperature: value.temperature === "" || value.temperature === null || value.temperature === undefined ? "" : Number(value.temperature),
+  topP: value.topP === "" || value.topP === null || value.topP === undefined ? "" : Number(value.topP),
+  maxTokens: Number(value.maxTokens) || 0,
+  createdAt: value.createdAt || "",
+  };
+}
+
+// Studio model pointing at a combo: the callable name routes into the combo,
+// so provider/model are the combo coordinates the caps and router code use.
+// Lock params (temperature/topP/maxTokens) are kept, unlike upstream which
+// dropped them.
+function toComboTargetModel(callName, value, target) {
+  return {
+  callName,
+  displayName: (value.displayName || "").trim() || callName,
+  targetModel: target,
+   targetLabel: (value.targetLabel || value.targetModel || "").trim() || target,
+  provider: "combo",
+  model: target,
+  isComboTarget: true,
   contextWindow: Number(value.contextWindow) || 0,
   systemPrompt: typeof value.systemPrompt === "string" ? value.systemPrompt : "",
   temperature: value.temperature === "" || value.temperature === null || value.temperature === undefined ? "" : Number(value.temperature),

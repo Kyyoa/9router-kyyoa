@@ -88,6 +88,19 @@ export async function GET() {
       });
     }
 
+    const tokensInWindowMap = {};
+    for (const k of keys) {
+      const resetMs = intervalMs(k.resetInterval);
+      const sinceTs = resetMs ? new Date(now - resetMs).toISOString() : "0000-01-01T00:00:00.000Z";
+      const row = db.get(
+        `SELECT COALESCE(SUM(promptTokens + completionTokens), 0) AS usedTokensInWindow
+           FROM usageHistory
+          WHERE apiKey = ? AND timestamp >= ?`,
+        [k.key, sinceTs]
+      );
+      tokensInWindowMap[k.key] = row?.usedTokensInWindow || 0;
+    }
+
     const statusByRaw = db.all(
       `SELECT apiKey, status, COUNT(*) AS count FROM usageHistory ${keyCond} GROUP BY apiKey, status`,
       keyParams
@@ -107,7 +120,8 @@ export async function GET() {
       const completionTokens = t.completionTokens || 0;
       const st = errorsByKey[k.key] || { ok: 0, errors: 0 };
       const limit = k.tokenLimit || 0;
-      const used = k.usedTokens || 0;
+      // Use tokens actually consumed in the current window, not the mutable usedTokens column
+      const used = tokensInWindowMap[k.key] || k.usedTokens || 0;
       const resetSpan = intervalMs(k.resetInterval);
       return {
         id: k.id,

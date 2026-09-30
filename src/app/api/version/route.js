@@ -9,6 +9,14 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     const info = await getUpdateInfo(pkg.version);
+    // The copied command must work when pasted into ANY terminal — newbies open
+    // a shell at ~ (or C:\Users\...) and stall on "not a git repository".
+    // process.cwd() is the install dir, so prefix cd and it just works.
+    const baseCmd = info.installCmd || "";
+    const installDir = process.cwd();
+    const installCmd = baseCmd.startsWith("cd ") ? baseCmd : `cd "${installDir}" && ${baseCmd}`;
+    // Tell the user HOW to start again: same port the server runs on now.
+    const port = process.env.PORT || "20130";
     return Response.json({
       currentVersion: info.currentVersion,
       currentRevision: info.currentRevision || null,
@@ -21,7 +29,9 @@ export async function GET() {
       hasUpdate: info.hasUpdate === true,
       revisionKnown: info.revisionKnown !== false,
       lookupFailed: info.lookupFailed === true,
-      installCmd: info.installCmd || "",
+      installCmd,
+      installDir,
+      startHint: `PORT=${port} node custom-server.js --port ${port}`,
     }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.log("Error checking version:", error);

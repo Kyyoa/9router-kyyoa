@@ -406,6 +406,8 @@ export default function Sidebar({ onClose }) {
             <ManualUpdatePanel
               latestVersion={updateInfo?.latestVersion}
               installCmd={INSTALL_CMD}
+              installDir={updateInfo?.installDir}
+              startHint={updateInfo?.startHint}
               copied={copied}
               onCopyAndShutdown={handleCopyAndShutdown}
               onCancel={handleCancelUpdate}
@@ -434,7 +436,7 @@ Sidebar.propTypes = {
   onClose: PropTypes.func,
 };
 
-function ManualUpdatePanel({ latestVersion, installCmd, copied, onCopyAndShutdown, onCancel, countdown, isDisconnected }) {
+function ManualUpdatePanel({ latestVersion, installCmd, installDir, startHint, copied, onCopyAndShutdown, onCancel, countdown, isDisconnected }) {
   const isCountingDown = countdown > 0;
   return (
     <div className="w-full max-w-lg rounded-xl bg-neutral-900/95 border border-white/10 p-6 text-white">
@@ -454,15 +456,16 @@ function ManualUpdatePanel({ latestVersion, installCmd, copied, onCopyAndShutdow
         </div>
       </div>
 
-      <p className="text-sm text-white/80 mb-2">Install command:</p>
+      <p className="text-sm text-white/80 mb-2">Install command (works from any folder — it jumps to the right one first):</p>
       <div className="w-full px-3 py-2 rounded bg-white/5 mb-4">
         <code className="text-xs font-mono text-amber-400 break-all">{installCmd}</code>
       </div>
 
       <ol className="text-xs text-white/70 space-y-1 list-decimal list-inside mb-4">
         <li>Click <strong>Copy & Shutdown</strong> below.</li>
-        <li>Paste the command into your terminal and press Enter.</li>
-        <li>Run <code className="px-1 rounded bg-white/10 text-green-400">9router</code> again after install.</li>
+        <li>Open a terminal, paste the command, press Enter — wait until the build finishes.</li>
+        <li>Start the server again from the same folder{installDir ? (<> (<code className="px-1 rounded bg-white/10 text-green-400">{installDir}</code>)</>) : null}{startHint ? (<> with <code className="px-1 rounded bg-white/10 text-green-400">{startHint}</code></>) : " the same way you started it the first time"}.</li>
+        <li>Reload this page — the sidebar should show the new version.</li>
       </ol>
 
       {isDisconnected ? (
@@ -486,6 +489,8 @@ function ManualUpdatePanel({ latestVersion, installCmd, copied, onCopyAndShutdow
 ManualUpdatePanel.propTypes = {
   latestVersion: PropTypes.string,
   installCmd: PropTypes.string.isRequired,
+  installDir: PropTypes.string,
+  startHint: PropTypes.string,
   copied: PropTypes.bool,
   onCopyAndShutdown: PropTypes.func.isRequired,
   onCancel: PropTypes.func.isRequired,

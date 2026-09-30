@@ -25,7 +25,12 @@ if exist "%DATA_DIR%\db\data.sqlite" (
 )
 
 echo [3/6] git pull...
-git pull --ff-only
+git rev-parse --abbrev-ref --symbolic-full-name @{u} >nul 2>&1
+if errorlevel 1 (
+  git pull --ff-only origin master
+) else (
+  git pull --ff-only
+)
 if errorlevel 1 ( echo [X] git pull gagal (repo lokal ada perubahan). Rapikan dulu: git status & exit /b 1 )
 
 echo [4/6] npm install...

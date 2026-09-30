@@ -39,8 +39,15 @@ else
 fi
 
 # 3. Pull (ff-only: kalau lokal dimodif, BERHENTI, jangan paksa)
+# Branch clone normal punya upstream; kalau tidak ada (mis. clone --no-checkout
+# atau upstream kehapus), fallback eksplisit ke origin/master biar user tidak
+# disuruh mikir soal tracking branch.
 say "git pull --ff-only..."
-git pull --ff-only || fail "git pull gagal (repo lokal ada perubahan / diverge). Rapikan dulu: git status"
+if git rev-parse --abbrev-ref --symbolic-full-name @{u} >/dev/null 2>&1; then
+  git pull --ff-only || fail "git pull gagal (repo lokal ada perubahan / diverge). Rapikan dulu: git status"
+else
+  git pull --ff-only origin master || fail "git pull gagal (repo lokal ada perubahan / diverge, atau remote origin/master tidak ada). Rapikan dulu: git status"
+fi
 
 # 4. Install + build
 say "npm install..."

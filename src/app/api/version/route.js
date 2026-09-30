@@ -14,7 +14,8 @@ export async function GET() {
     // process.cwd() is the install dir, so prefix cd and it just works.
     const baseCmd = info.installCmd || "";
     const installDir = process.cwd();
-    const installCmd = baseCmd.startsWith("cd ") ? baseCmd : `cd "${installDir}" && ${baseCmd}`;
+    const scriptCmd = process.platform === "win32" ? "scripts\\self-update.bat" : baseCmd;
+    const installCmd = scriptCmd.startsWith("cd ") ? scriptCmd : `cd "${installDir}" && ${scriptCmd}`;
     // Tell the user HOW to start again: same port the server runs on now.
     const port = process.env.PORT || "20130";
     return Response.json({

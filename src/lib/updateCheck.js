@@ -14,7 +14,8 @@ const API = "https://api.github.com";
 const CHECK_TTL_MS = 3600000; // one successful lookup per hour
 const FAILURE_TTL_MS = 300000; // a failed lookup is retried after 5 minutes
 const MAX_PAYLOAD = 2 * 1024 * 1024; // never buffer a runaway response
-const GIT_UPDATE_CMD = "git pull --ff-only && npm install && npm run build";
+const GIT_UPDATE_CMD = "bash scripts/self-update.sh";
+// Windows users get self-update.bat instead — the version route picks by platform.
 
 const cache = (global.__updateCheck ??= { info: null, fetchedAt: 0, revision: undefined, gitInstall: undefined });
 

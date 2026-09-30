@@ -456,16 +456,15 @@ function ManualUpdatePanel({ latestVersion, installCmd, installDir, startHint, c
         </div>
       </div>
 
-      <p className="text-sm text-white/80 mb-2">Install command (works from any folder — it jumps to the right one first):</p>
+      <p className="text-sm text-white/80 mb-2">Update command (works from any folder — it jumps to the right one first, backs up your data, then restarts itself):</p>
       <div className="w-full px-3 py-2 rounded bg-white/5 mb-4">
         <code className="text-xs font-mono text-amber-400 break-all">{installCmd}</code>
       </div>
 
       <ol className="text-xs text-white/70 space-y-1 list-decimal list-inside mb-4">
         <li>Click <strong>Copy & Shutdown</strong> below.</li>
-        <li>Open a terminal, paste the command, press Enter — wait until the build finishes.</li>
-        <li>Start the server again from the same folder{installDir ? (<> (<code className="px-1 rounded bg-white/10 text-green-400">{installDir}</code>)</>) : null}{startHint ? (<> with <code className="px-1 rounded bg-white/10 text-green-400">{startHint}</code></>) : " the same way you started it the first time"}.</li>
-        <li>Reload this page — the sidebar should show the new version.</li>
+        <li>Open a terminal, paste the command, press Enter — wait until it prints ✅ (a few minutes for the build).</li>
+        <li>Reload this page — the sidebar should show the new version. Done, no manual restart needed.</li>
       </ol>
 
       {isDisconnected ? (

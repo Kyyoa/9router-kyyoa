@@ -4,7 +4,7 @@ import { getSettings } from "@/lib/localDb";
 import { isOidcConfigured } from "@/lib/auth/oidc";
 import { isSamlConfigured } from "@/lib/auth/saml.js";
 import { getDashboardAuthSession } from "@/lib/auth/dashboardSession";
-import { firstAllowedPage } from "@/lib/auth/permissionPaths";
+import { firstAllowedPage, normalizePermissions, FULL_PERMISSIONS, DEFAULT_PERMISSIONS } from "@/lib/auth/permissionPaths";
 
 export async function GET() {
   try {
@@ -20,7 +20,12 @@ export async function GET() {
     const samlEmail = String(session?.samlEmail || "").trim();
 
     const role = session?.role || "admin";
-    const permissions = session?.permissions || (role === "admin" ? { manageApiKeys: true, manageModels: true, manageProviders: true, viewUsage: true } : { manageApiKeys: false, manageModels: false, manageProviders: false, viewUsage: true });
+    // A password session is a full admin. Anything else carries exactly what its
+    // key holds, normalized so a key stored before a permission existed simply
+    // lacks it rather than inheriting one.
+    const permissions = session?.permissions
+      ? normalizePermissions(session.permissions)
+      : (role === "admin" ? FULL_PERMISSIONS : DEFAULT_PERMISSIONS);
     const isApiKeyLogin = role === "apikey";
 
     const displayName =

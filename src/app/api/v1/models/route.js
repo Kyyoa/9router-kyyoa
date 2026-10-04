@@ -348,8 +348,14 @@ export async function buildModelsList(kindFilter, options = {}) {
     if (combo.kind === "webSearch" || combo.kind === "webFetch") {
       entry.kind = combo.kind;
     } else {
-      const comboCaps = aggregateComboCapabilities(combo.models, comboByName);
-      if (comboCaps) entry.capabilities = comboCaps;
+      const comboCaps = aggregateComboCapabilities(combo.models, comboByName, 0, Number(combo.contextWindow) || 0);
+      if (comboCaps) {
+        entry.capabilities = comboCaps;
+        // Same reason single models publish it: a client that only reads
+        // context_length must not fall back to guessing the window from the name.
+        if (Number.isFinite(comboCaps.contextWindow)) entry.context_length = comboCaps.contextWindow;
+        if (Number.isFinite(comboCaps.maxOutput)) entry.max_completion_tokens = comboCaps.maxOutput;
+      }
     }
     models.push(entry);
   }
@@ -383,12 +389,18 @@ export async function buildModelsList(kindFilter, options = {}) {
         if (!kindFilter.includes(modelKind(model))) continue;
         if (isDisabled(alias, model.id)) continue;
         if (studioTargets.isStudioTarget([providerId, alias], model.id)) continue;
-        models.push({
+        const staticCaps = getCapabilitiesForModel(alias, model.id);
+        const staticEntry = {
           id: `${alias}/${model.id}`,
           object: "model",
           owned_by: alias,
-          capabilities: getCapabilitiesForModel(alias, model.id),
-        });
+        };
+        if (staticCaps) staticEntry.capabilities = staticCaps;
+        // Top-level snake_case limits: clients matching context_length don't
+        // recurse into the nested capabilities block (matches the live-connection path).
+        if (Number.isFinite(staticCaps?.contextWindow)) staticEntry.context_length = staticCaps.contextWindow;
+        if (Number.isFinite(staticCaps?.maxOutput)) staticEntry.max_completion_tokens = staticCaps.maxOutput;
+        models.push(staticEntry);
       }
     }
 
@@ -403,11 +415,20 @@ export async function buildModelsList(kindFilter, options = {}) {
       if (!modelId) continue;
       if (studioTargets.isStudioTarget(providerAlias, modelId)) continue;
 
-      models.push({
+      // Custom models used to publish bare {id,object,owned_by} — a client then
+      // guessed the window from the name and read a 1M model as higher, never
+      // hitting compaction and hard-failing upstream. Publish caps + limits
+      // like every other branch.
+      const customCaps = getCapabilitiesForModel(providerAlias, modelId);
+      const customEntry = {
         id: `${providerAlias}/${modelId}`,
         object: "model",
         owned_by: providerAlias,
-      });
+      };
+      if (customCaps) customEntry.capabilities = customCaps;
+      if (Number.isFinite(customCaps?.contextWindow)) customEntry.context_length = customCaps.contextWindow;
+      if (Number.isFinite(customCaps?.maxOutput)) customEntry.max_completion_tokens = customCaps.maxOutput;
+      models.push(customEntry);
     }
   } else {
     for (const [providerId, conn] of activeConnectionByProvider.entries()) {

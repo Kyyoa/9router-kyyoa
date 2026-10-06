@@ -4,50 +4,23 @@ import { useState } from "react";
 import PropTypes from "prop-types";
 import { Card, Button, Input } from "@/shared/components";
 import { streamChatCompletion } from "@/shared/utils/chatStream";
+import { INTERVIEW_ID, INTERVIEW_EN, STRINGS } from "./strings.js";
 
 // Wawancara PRD 3 ronde (decision-questionnaire): maks 3 pertanyaan per ronde,
-// single-idea, paling penting dulu. Tiap pertanyaan ada contoh jawaban + tombol lewati.
-export const INTERVIEW_ROUNDS = [
-  {
-    id: "problem",
-    title: "Ronde 1 — Masalah & User",
-    hint: "Tanpa masalah yang jelas, PRD jadi daftar fitur halu.",
-    questions: [
-      { key: "problem", label: "Masalah apa yang mau diselesaikan?", example: "Contoh: UMKM susah bikin laporan keuangan, catat manual di buku, sering hilang." },
-      { key: "users", label: "Siapa yang paling sakit kena masalah ini?", example: "Contoh: pemilik warung 30-50 tahun, gaptek, HP Android RAM 3GB." },
-      { key: "metric", label: "Sukses = angka apa yang berubah?", example: "Contoh: waktu bikin laporan dari 2 jam jadi 10 menit." },
-    ],
-  },
-  {
-    id: "limits",
-    title: "Ronde 2 — Batas & Scope",
-    hint: "Batas yang eksplisit mencegah scope creep.",
-    questions: [
-      { key: "constraints", label: "Batasan teknis / budget / waktu?", example: "Contoh: 1 dev, 3 minggu, hosting gratisan, tanpa bayar API." },
-      { key: "nonGoals", label: "Apa yang JELAS bukan bagian proyek ini?", example: "Contoh: bukan aplikasi kasir, bukan multi-cabang, bukan iOS." },
-      { key: "stack", label: "Platform / stack yang dipakai?", example: "Contoh: Next.js + SQLite, jalan di VPS 1GB." },
-    ],
-  },
-  {
-    id: "features",
-    title: "Ronde 3 — Fitur Kasar",
-    hint: "Tulis 3-5 fitur impian — nanti dipaksa jadi P0/P1/P2.",
-    questions: [
-      { key: "features", label: "3-5 fitur yang dibayangin? (satu baris satu fitur)", example: "Contoh:\n- Catat pemasukan/pengeluaran\n- Laporan bulanan PDF\n- Ingetin stok menipis" },
-      { key: "team", label: "Siapa yang ngerjain?", example: "Contoh: gw sendiri + AI, frontend lemah." },
-      { key: "timeline", label: "Target jadi kapan?", example: "Contoh: 1 bulan, demo ke teman dulu." },
-    ],
-  },
-];
+// single-idea, paling penting dulu. Contoh tampil sebagai teks bantuan di bawah
+// kotak (bukan placeholder) biar ga dikira isi yang harus ditimpa.
+export const INTERVIEW_ROUNDS = INTERVIEW_ID;
 
-function buildInterviewMessages({ round, answers, brief, language }) {
+function buildInterviewMessages({ round, rounds, answers, brief, language, uiLang }) {
   const langLine = language === "id"
     ? "Tulis dalam Bahasa Indonesia yang santai tapi jelas."
     : "Write in English.";
-  const answered = INTERVIEW_ROUNDS.slice(0, round)
-    .flatMap((r) => r.questions.map((q) => `- ${q.label}: ${answers[q.key] || "(dilewati)"}`))
+  const skipWord = uiLang === "id" ? "lewat" : "skip";
+  const skippedWord = uiLang === "id" ? "dilewati" : "skipped";
+  const answered = rounds.slice(0, round)
+    .flatMap((r) => r.questions.map((q) => `- ${q.label}: ${answers[q.key] || `(${skippedWord})`}`))
     .join("\n");
-  const current = INTERVIEW_ROUNDS[round];
+  const current = rounds[round];
   return [
     {
       role: "system",
@@ -55,7 +28,7 @@ function buildInterviewMessages({ round, answers, brief, language }) {
         "Kamu product manager senior yang mewawancarai user awam sebelum menulis PRD.",
         langLine,
         `Fokus ronde ini: ${current.title} — ${current.hint}`,
-        "Aturan: ajukan MAKSIMAL 3 pertanyaan di bawah, satu ide per pertanyaan, urut paling penting dulu. Tiap pertanyaan kasih contoh jawaban yang konkret + bilang boleh jawab 'lewat' kalau ga tau. JANGAN tulis PRD. JANGAN ceramah. Output HANYA pertanyaan bernomor + contohnya.",
+        `Aturan: ajukan MAKSIMAL 3 pertanyaan di bawah, satu ide per pertanyaan, urut paling penting dulu. Tiap pertanyaan kasih contoh jawaban yang konkret + bilang boleh jawab '${skipWord}' kalau ga tau. JANGAN tulis PRD. JANGAN ceramah. Output HANYA pertanyaan bernomor + contohnya.`,
         current.questions.map((q, i) => `${i + 1}. ${q.label}\n   Contoh: ${q.example}`).join("\n"),
       ].join("\n"),
     },
@@ -71,16 +44,18 @@ function buildInterviewMessages({ round, answers, brief, language }) {
 
 export function buildEnrichedBrief({ brief, answers }) {
   const parts = [String(brief || "").trim()];
-  for (const round of INTERVIEW_ROUNDS) {
+  for (const round of INTERVIEW_ID) {
     for (const q of round.questions) {
       const v = String(answers[q.key] || "").trim();
-      if (v && v.toLowerCase() !== "lewat") parts.push(`${q.label} ${v}`);
+      if (v && !/^(lewat|lewati|skip|skipped)$/i.test(v)) parts.push(`${q.label} ${v}`);
     }
   }
   return parts.filter(Boolean).join("\n");
 }
 
-export default function InterviewPanel({ brief, language, model, apiKey, onApply, disabled }) {
+export default function InterviewPanel({ brief, language, uiLang = "id", model, apiKey, onApply, disabled }) {
+  const st = STRINGS[uiLang] || STRINGS.id;
+  const rounds = uiLang === "id" ? INTERVIEW_ID : INTERVIEW_EN;
   const [round, setRound] = useState(0);
   const [answers, setAnswers] = useState({});
   const [chat, setChat] = useState([]);
@@ -92,7 +67,7 @@ export default function InterviewPanel({ brief, language, model, apiKey, onApply
 
   const ask = async (roundIdx) => {
     if (!model) {
-      setError("Pilih model dulu di panel Model.");
+      setError(st.needPickModel);
       return;
     }
     setLoading(true);
@@ -100,29 +75,31 @@ export default function InterviewPanel({ brief, language, model, apiKey, onApply
     try {
       const text = await streamChatCompletion({
         model,
-        messages: buildInterviewMessages({ round: roundIdx, answers, brief, language }),
+        messages: buildInterviewMessages({ round: roundIdx, rounds, answers, brief, language, uiLang }),
         apiKey,
         stream: false,
       }).then((r) => r.text);
       setChat((prev) => [...prev, { round: roundIdx, text: String(text || "").trim() }]);
     } catch (err) {
-      setError(err?.message || "Wawancara gagal.");
+      setError(err?.message || st.interviewFail);
     } finally {
       setLoading(false);
     }
   };
 
-  const current = INTERVIEW_ROUNDS[round];
+  const current = rounds[round];
   const filledCount = Object.values(answers).filter((v) => String(v || "").trim()).length;
 
   return (
     <Card padding="md" className="flex min-w-0 flex-col gap-4">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold text-text-main">Wawancara PRD</h2>
-        <span className="text-[11px] text-text-muted">Ronde {Math.min(round + 1, 3)}/3{done ? " — selesai" : ""}</span>
+        <h2 className="text-sm font-semibold text-text-main">{st.interviewTitle}</h2>
+        <span className="text-[11px] text-text-muted">
+          {uiLang === "id" ? "Ronde" : "Round"} {Math.min(round + 1, 3)}/3{done ? (uiLang === "id" ? " — selesai" : " — done") : ""}
+        </span>
       </div>
       <p className="text-[11px] text-text-muted -mt-2">
-        Jawab seadanya — boleh tulis &quot;lewat&quot;. Makin konkret jawabanmu, makin bagus PRD-nya.
+        {st.interviewSub}
       </p>
 
       {!done && (
@@ -130,15 +107,18 @@ export default function InterviewPanel({ brief, language, model, apiKey, onApply
           <p className="text-xs font-medium text-text-main">{current.title}</p>
           <p className="text-[11px] text-text-muted -mt-2">{current.hint}</p>
           {current.questions.map((q) => (
-            <div key={q.key} className="flex flex-col gap-1.5">
+            <div key={q.key} className="flex flex-col gap-1">
               <label className="block text-xs font-medium text-text-main">{q.label}</label>
               <Input
                 value={answers[q.key] || ""}
                 onChange={(e) => setAnswer(q.key, e.target.value)}
-                placeholder={q.example.split("\n")[0].slice(0, 80)}
+                placeholder={uiLang === "id" ? "Ketik jawabanmu di sini..." : "Type your answer here..."}
                 className="min-w-0"
                 disabled={disabled || loading}
               />
+              <p className="whitespace-pre-wrap text-[11px] leading-relaxed text-text-muted/80">
+                💡 {q.example}
+              </p>
             </div>
           ))}
           <div className="flex gap-2">
@@ -148,11 +128,11 @@ export default function InterviewPanel({ brief, language, model, apiKey, onApply
               disabled={disabled || loading || !model}
               onClick={() => ask(round)}
             >
-              {loading ? "Minta pertanyaan..." : chat.some((c) => c.round === round) ? "Tanya ulang" : "Minta AI nanya"}
+              {loading ? st.askingQ : chat.some((c) => c.round === round) ? st.askAgainQ : st.askQuestions}
             </Button>
-            {round < INTERVIEW_ROUNDS.length - 1 ? (
+            {round < rounds.length - 1 ? (
               <Button size="sm" variant="primary" disabled={disabled || loading} onClick={() => setRound((r) => r + 1)}>
-                Lanjut ronde {round + 2}
+                {st.nextRound(round + 2)}
               </Button>
             ) : (
               <Button
@@ -164,7 +144,7 @@ export default function InterviewPanel({ brief, language, model, apiKey, onApply
                   onApply?.(buildEnrichedBrief({ brief, answers }));
                 }}
               >
-                Selesai — pakai buat PRD ({filledCount} jawaban)
+                {st.finishInterview(filledCount)}
               </Button>
             )}
           </div>
@@ -187,7 +167,7 @@ export default function InterviewPanel({ brief, language, model, apiKey, onApply
               setRound(0);
             }}
           >
-            Ulangi wawancara
+            {st.redoInterview}
           </Button>
         </div>
       )}
@@ -200,6 +180,7 @@ export default function InterviewPanel({ brief, language, model, apiKey, onApply
 InterviewPanel.propTypes = {
   brief: PropTypes.string,
   language: PropTypes.string,
+  uiLang: PropTypes.string,
   model: PropTypes.string,
   apiKey: PropTypes.string,
   onApply: PropTypes.func,

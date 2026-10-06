@@ -36,25 +36,13 @@ import {
   renderTasksMarkdown,
 } from "./checklist.js";
 import InterviewPanel, { buildEnrichedBrief } from "./InterviewPanel.js";
+import { STRINGS, UI_LANGS, DETAIL_FIELDS_ID, DETAIL_FIELDS_EN, TEMPLATE_ID, DEPTH_ID } from "./strings.js";
 
 marked.setOptions({ gfm: true, breaks: true });
 
 const ALIAS_TO_PROVIDER_ID = Object.fromEntries(
   Object.entries(PROVIDER_ID_TO_ALIAS).map(([id, alias]) => [alias, id])
 );
-
-const DETAIL_FIELDS = [
-  { key: "product", label: "Product / feature name", placeholder: "e.g. Usage Budget Alerts" },
-  { key: "users", label: "Primary users", placeholder: "e.g. solo devs running a self-hosted gateway" },
-  { key: "problem", label: "Problem to solve", placeholder: "e.g. nobody notices quota burn until it is gone" },
-  { key: "stack", label: "Platform / stack", placeholder: "e.g. Next.js + SQLite, single node" },
-  { key: "timeline", label: "Timeline / target date", placeholder: "e.g. ship in 3 weeks, GA next quarter" },
-  { key: "team", label: "Team building it", placeholder: "e.g. 1 backend + 1 frontend, 0 designer" },
-  { key: "constraints", label: "Hard constraints", placeholder: "e.g. no new infrastructure, offline-first" },
-  { key: "nonGoals", label: "Known non-goals", placeholder: "e.g. no billing, no multi-tenant SSO" },
-  { key: "metrics", label: "Metrics that matter", placeholder: "e.g. alert precision, quota overruns avoided" },
-  { key: "notes", label: "Extra context", placeholder: "prior art, links, politics, anything else" },
-];
 
 const EMPTY_FORM = {
   product: "",
@@ -131,6 +119,9 @@ function PrdContent() {
   const [template, setTemplate] = useState("product");
   const [depth, setDepth] = useState("deep");
   const [language, setLanguage] = useState("id");
+  const [uiLang, setUiLang] = useState("id");
+  const T = STRINGS[uiLang] || STRINGS.id;
+  const detailFields = uiLang === "id" ? DETAIL_FIELDS_ID : DETAIL_FIELDS_EN;
   const [maxTokens, setMaxTokens] = useState("");
   const [includeAppendix, setIncludeAppendix] = useState(true);
   const [qualityPass, setQualityPass] = useState(true);
@@ -342,7 +333,7 @@ function PrdContent() {
       if (err?.name === "AbortError") {
         setStage(draftRef.current ? "done" : "idle");
       } else {
-        setError(err?.message || "Generation failed");
+        setError(err?.message || T.genFail);
         setErrorDetail(err?.detail || "");
         setStage("error");
       }
@@ -385,7 +376,7 @@ function PrdContent() {
     }
   }, [markdown, view, running]);
 
-  const docTitle = form.product.trim() || brief.trim().split("\n")[0].slice(0, 70) || "Untitled PRD";
+  const docTitle = form.product.trim() || brief.trim().split("\n")[0].slice(0, 70) || T.untitled;
 
   const handleSave = async () => {
     if (!markdown.trim()) return;
@@ -411,13 +402,13 @@ function PrdContent() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(data.error || "Failed to save PRD");
+        setError(data.error || T.saveFail);
         return;
       }
       setSavedId(data.doc?.id || "");
       loadDocs();
     } catch (err) {
-      setError(err?.message || "Failed to save PRD");
+      setError(err?.message || T.saveFail);
     } finally {
       setSaving(false);
     }
@@ -502,7 +493,7 @@ function PrdContent() {
       taskDraftRef.current = text;
       setTaskModelText(text);
       setTaskStage(text.trim() ? "done" : "error");
-      if (!text.trim()) setTaskError("The model answered with nothing usable, so ask it again.");
+      if (!text.trim()) setTaskError(T.emptyAnswer);
     } catch (err) {
       if (err?.name === "AbortError") {
         const partial = cleanModelChecklist(taskDraftRef.current);
@@ -510,7 +501,7 @@ function PrdContent() {
         setTaskModelText(partial);
         setTaskStage(partial.trim() ? "done" : "idle");
       } else {
-        setTaskError(err?.message || "The task list request failed.");
+        setTaskError(err?.message || T.taskFail);
         setTaskStage("error");
       }
     } finally {
@@ -572,21 +563,28 @@ function PrdContent() {
 
   return (
     <div className="flex min-w-0 flex-col gap-6 px-1 sm:px-0">
-      <div className="min-w-0">
-        <h1 className="text-lg font-semibold leading-none text-text-main flex items-center gap-2">
-          <span className="material-symbols-outlined size-[20px] text-[20px] leading-none shrink-0 text-primary">description</span>
-          PRD Document Writer
-        </h1>
-        <p className="text-xs text-text-muted mt-0.5">
-          Turn a short brief into a full, reviewable product requirements document with any model you choose.
-        </p>
+      <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-lg font-semibold leading-none text-text-main flex items-center gap-2">
+            <span className="material-symbols-outlined size-[20px] text-[20px] leading-none shrink-0 text-primary">description</span>
+            {T.pageTitle}
+          </h1>
+          <p className="text-xs text-text-muted mt-0.5">
+            {T.pageSub}
+          </p>
+        </div>
+        <div className="flex shrink-0 flex-col gap-1">
+          <span className="text-[11px] text-text-muted">{T.uiLangLabel}</span>
+          <SegmentedControl size="sm" value={uiLang} onChange={setUiLang} options={UI_LANGS} />
+        </div>
       </div>
 
-      <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-12">
-        <div className="flex min-w-0 flex-col gap-4 xl:col-span-5">
+      <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-2">
+        <div className="flex min-w-0 flex-col gap-4">
           <InterviewPanel
             brief={brief}
             language={language}
+            uiLang={uiLang}
             model={model}
             apiKey={activeApiKey}
             disabled={running}
@@ -594,32 +592,32 @@ function PrdContent() {
           />
           <Card padding="md" className="flex min-w-0 flex-col gap-4">
             <div className="flex items-center justify-between gap-2">
-              <h2 className="text-sm font-semibold text-text-main">Brief</h2>
+              <h2 className="text-sm font-semibold text-text-main">{T.briefTitle}</h2>
               <button
                 type="button"
                 onClick={() => setShowDetails((v) => !v)}
                 className="text-[11px] font-medium text-primary hover:underline shrink-0"
               >
-                {showDetails ? "Hide details" : `Add details (${DETAIL_FIELDS.length})`}
+                {showDetails ? T.hideDetails : T.addDetails(detailFields.length)}
               </button>
             </div>
 
             <div className="flex flex-col gap-2">
               <label className="block text-xs font-medium text-text-main">
-                Product idea <span className="text-red-500">*</span>
+                {T.productIdea} <span className="text-red-500">*</span>
               </label>
               <textarea
                 value={brief}
                 onChange={(e) => setBrief(e.target.value)}
                 rows={5}
-                placeholder="What should this build, who is it for, and what must be true when it ships?"
+                placeholder={T.productPh}
                 className="w-full min-w-0 rounded-[10px] border border-border/50 bg-surface-2 p-2.5 text-sm text-text-main placeholder-text-muted/70 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-all duration-150 ease-out resize-y"
               />
             </div>
 
             {showDetails && (
               <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
-                {DETAIL_FIELDS.map((field) => (
+                {detailFields.map((field) => (
                   <Input
                     key={field.key}
                     label={field.label}
@@ -632,47 +630,49 @@ function PrdContent() {
               </div>
             )}
           </Card>
+        </div>
 
+        <div className="flex min-w-0 flex-col gap-4">
           <Card padding="md" className="flex min-w-0 flex-col gap-4">
-            <h2 className="text-sm font-semibold text-text-main">Document shape</h2>
+            <h2 className="text-sm font-semibold text-text-main">{T.shapeTitle}</h2>
 
             <Select
-              label="Profile"
+              label={T.profileLabel}
               value={template}
               onChange={(e) => setTemplate(e.target.value)}
-              options={PRD_TEMPLATES.map((t) => ({ value: t.value, label: t.label }))}
+              options={PRD_TEMPLATES.map((t) => ({ value: t.value, label: uiLang === "id" ? TEMPLATE_ID[t.value]?.label || t.label : t.label }))}
             />
             <p className="text-[11px] text-text-muted -mt-2">
-              {PRD_TEMPLATES.find((t) => t.value === template)?.hint}
+              {uiLang === "id" ? TEMPLATE_ID[template]?.hint : PRD_TEMPLATES.find((t) => t.value === template)?.hint}
             </p>
 
             <div className="flex flex-col gap-1.5">
-              <span className="text-sm font-medium text-text-main">Depth</span>
+              <span className="text-sm font-medium text-text-main">{T.depthLabel}</span>
               <SegmentedControl
                 size="sm"
                 value={depth}
                 onChange={setDepth}
-                options={PRD_DEPTHS.map((d) => ({ value: d.value, label: d.label }))}
+                options={PRD_DEPTHS.map((d) => ({ value: d.value, label: uiLang === "id" ? DEPTH_ID[d.value]?.label || d.label : d.label }))}
               />
               <p className="text-[11px] text-text-muted">
-                {PRD_DEPTHS.find((d) => d.value === depth)?.guidance}
+                {uiLang === "id" ? DEPTH_ID[depth]?.guidance : PRD_DEPTHS.find((d) => d.value === depth)?.guidance}
               </p>
             </div>
 
             <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
               <Select
-                label="Language"
+                label={T.docLangLabel}
                 value={language}
                 onChange={(e) => setLanguage(e.target.value)}
                 options={PRD_LANGUAGES}
               />
               <Input
-                label="Max output tokens"
+                label={T.maxTokensLabel}
                 type="number"
                 min="0"
                 value={maxTokens}
                 onChange={(e) => setMaxTokens(e.target.value)}
-                placeholder="0 = model default"
+                placeholder={T.maxTokensPh}
                 className="min-w-0"
               />
             </div>
@@ -681,12 +681,12 @@ function PrdContent() {
               size="sm"
               checked={includeAppendix}
               onChange={setIncludeAppendix}
-              label="Appendix with glossary and assumption register"
+              label={T.appendixLabel}
             />
 
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-sm font-medium text-text-main">Sections</span>
+                <span className="text-sm font-medium text-text-main">{T.sectionsLabel}</span>
                 <button
                   type="button"
                   onClick={() =>
@@ -694,11 +694,11 @@ function PrdContent() {
                   }
                   className="text-[11px] font-medium text-primary hover:underline shrink-0"
                 >
-                  {sectionsOn.length === outline.length ? "Clear all" : "Select all"}
+                  {sectionsOn.length === outline.length ? T.clearAll : T.selectAll}
                 </button>
               </div>
               <p className="text-[11px] text-text-muted">
-                {sectionsOn.length} of {outline.length} sections will be written, in this order.
+                {T.sectionsCount(sectionsOn.length, outline.length)}
               </p>
               <div className="flex max-h-[190px] min-w-0 flex-col gap-1 overflow-y-auto custom-scrollbar pr-1">
                 {outline.map((section, index) => {
@@ -734,14 +734,15 @@ function PrdContent() {
           </Card>
 
           <Card padding="md" className="flex min-w-0 flex-col gap-4">
-            <h2 className="text-sm font-semibold text-text-main">Models</h2>
+            <h2 className="text-sm font-semibold text-text-main">{T.modelsTitle}</h2>
 
             <ModelSlot
-              label="Writer model"
+              label={T.writerLabel}
               required
               value={model}
               onPick={() => setPickerFor("writer")}
               onClear={() => setModel("")}
+              pickHint={T.pickWriterPh}
             />
 
             <div className="flex flex-col gap-3">
@@ -749,13 +750,13 @@ function PrdContent() {
                 size="sm"
                 checked={qualityPass}
                 onChange={setQualityPass}
-                label="Review pass — critique the draft, then rewrite it"
+                label={T.reviewLabel}
               />
               {qualityPass && (
                 <ModelSlot
-                  label="Reviewer model (optional)"
+                  label={T.reviewerLabel}
                   value={reviewerModel}
-                  fallback={model ? `Same as writer: ${model}` : ""}
+                  fallback={model ? T.sameAsWriter(model) : ""}
                   onPick={() => setPickerFor("reviewer")}
                   onClear={() => setReviewerModel("")}
                 />
@@ -769,7 +770,7 @@ function PrdContent() {
                 disabled={running ? false : !canGenerate}
                 variant={running ? "secondary" : "primary"}
               >
-                {stage === "drafting" ? "Writing..." : stage === "reviewing" ? "Reviewing..." : running ? "Stop" : "Generate PRD"}
+                {stage === "drafting" ? T.writing : stage === "reviewing" ? T.reviewing : running ? T.stop : T.generate}
               </Button>
               <Button
                 type="button"
@@ -778,23 +779,24 @@ function PrdContent() {
                 icon="code"
                 onClick={() => setShowPrompt(true)}
               >
-                Prompt
+                {T.promptBtn}
               </Button>
             </div>
             {!model && (
               <p className="text-[11px] text-amber-500 -mt-1">
-                A writer model is required before generating — pick one above.
+                {T.needModel}
               </p>
             )}
             {model && !brief.trim() && !form.product.trim() && (
               <p className="text-[11px] text-text-muted -mt-1">
-                Add an idea or a product name so the document has a subject.
+                {T.needIdea}
               </p>
             )}
           </Card>
         </div>
+      </div>
 
-        <div className="flex min-w-0 flex-col gap-4 xl:col-span-7">
+      <div className="flex min-w-0 flex-col gap-4">
           <Card padding="none" className="flex min-w-0 flex-col overflow-hidden">
             <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
               <div className="flex min-w-0 items-center gap-2">
@@ -803,8 +805,8 @@ function PrdContent() {
                   value={view}
                   onChange={setView}
                   options={[
-                    { value: "preview", label: "Preview", icon: "visibility" },
-                    { value: "markdown", label: "Markdown", icon: "code" },
+                    { value: "preview", label: T.previewTab, icon: "visibility" },
+                    { value: "markdown", label: T.markdownTab, icon: "code" },
                   ]}
                 />
                 {running && (
@@ -816,7 +818,7 @@ function PrdContent() {
               </div>
               <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5">
                 <Button size="sm" variant="ghost" icon="save" onClick={handleSave} disabled={!markdown.trim() || saving}>
-                  {savedId ? "Update" : "Save"}
+                  {savedId ? T.update : T.save}
                 </Button>
                 <Button
                   size="sm"
@@ -825,7 +827,7 @@ function PrdContent() {
                   onClick={() => copy(markdown, docTitle)}
                   disabled={!markdown.trim()}
                 >
-                  Copy
+                  {T.copy}
                 </Button>
                 <Button
                   size="sm"
@@ -834,7 +836,7 @@ function PrdContent() {
                   onClick={openTaskList}
                   disabled={!markdown.trim()}
                 >
-                  Task list
+                  {T.taskList}
                 </Button>
                 <Button size="sm" variant="ghost" icon="download" onClick={handleDownload} disabled={!markdown.trim()}>
                   .md
@@ -878,7 +880,7 @@ function PrdContent() {
                   </span>
                   {usage ? (
                     <span>
-                      {usage.total_tokens || usage.output_tokens || 0} out tokens
+                      {T.outTokens(usage.total_tokens || usage.output_tokens || 0)}
                     </span>
                   ) : null}
                   {cost != null ? <span>~{showCost(cost)}</span> : null}
@@ -908,21 +910,22 @@ function PrdContent() {
                   {running ? "edit_note" : "description"}
                 </span>
                 <p className="text-sm font-medium text-text-main">
-                  {running ? "Writing the document..." : "No document yet"}
+                  {running ? T.writingDoc : T.emptyTitle}
                 </p>
                 <p className="max-w-md text-xs text-text-muted">
-                  Describe the idea, pick a writer model, and generate — the result lands here with a section checklist.
+                  {T.emptySub}
                 </p>
               </div>
             )}
           </Card>
 
+          <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-2">
           {markdown.trim() && !running && (
             <Card padding="md" className="flex min-w-0 flex-col gap-3">
               <div className="flex min-w-0 items-center justify-between gap-2">
-                <h2 className="text-sm font-semibold text-text-main">Section checklist</h2>
+                <h2 className="text-sm font-semibold text-text-main">{T.checklistTitle}</h2>
                 <span className="shrink-0 text-[11px] text-text-muted">
-                  {audit.present === audit.total ? "complete" : `${audit.total - audit.present} missing`}
+                  {audit.present === audit.total ? T.complete : T.missing(audit.total - audit.present)}
                 </span>
               </div>
               <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-2">
@@ -948,7 +951,7 @@ function PrdContent() {
               </div>
               {critique && (
                 <div className="min-w-0 rounded-lg border border-border/50 bg-black/5 dark:bg-white/5 p-3">
-                  <p className="mb-1 text-[10px] uppercase tracking-wide text-text-muted/70">Reviewer critique</p>
+                  <p className="mb-1 text-[10px] uppercase tracking-wide text-text-muted/70">{T.critiqueTitle}</p>
                   <pre className="max-h-56 min-w-0 overflow-y-auto custom-scrollbar whitespace-pre-wrap break-words text-[11px] leading-relaxed text-text-muted">
                     {critique}
                   </pre>
@@ -959,12 +962,12 @@ function PrdContent() {
 
           <Card padding="md" className="flex min-w-0 flex-col gap-3">
             <div className="flex min-w-0 items-center justify-between gap-2">
-              <h2 className="text-sm font-semibold text-text-main">Saved documents</h2>
-              <span className="shrink-0 text-[11px] text-text-muted">{docs.length} saved</span>
+              <h2 className="text-sm font-semibold text-text-main">{T.savedTitle}</h2>
+              <span className="shrink-0 text-[11px] text-text-muted">{T.savedCount(docs.length)}</span>
             </div>
             {docs.length === 0 ? (
               <p className="text-xs text-text-muted">
-                Nothing saved yet — generate a PRD and hit Save to keep it here.
+                {T.savedEmpty}
               </p>
             ) : (
               <div className="flex min-w-0 flex-col gap-1.5">
@@ -986,7 +989,7 @@ function PrdContent() {
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-xs font-medium text-text-main">{doc.title}</span>
                         <span className="block min-w-0 truncate text-[11px] text-text-muted">
-                          {doc.model || "—"} · {doc.sectionCount} sections · {(doc.chars || 0).toLocaleString()} chars
+                          {T.docMeta(doc.model || "—", doc.sectionCount, (doc.chars || 0).toLocaleString())}
                           {formatDate(doc.updatedAt) ? ` · ${formatDate(doc.updatedAt)}` : ""}
                         </span>
                       </span>
@@ -994,7 +997,7 @@ function PrdContent() {
                     <button
                       type="button"
                       onClick={() => deleteDoc(doc.id)}
-                      title="Delete"
+                      title={T.deleteTitle}
                       className="shrink-0 rounded-lg p-1.5 text-text-muted hover:text-red-500 hover:bg-red-500/10 transition-colors"
                     >
                       <span className="material-symbols-outlined text-[16px]">delete</span>
@@ -1004,8 +1007,8 @@ function PrdContent() {
               </div>
             )}
           </Card>
+          </div>
         </div>
-      </div>
 
       {pickerFor && (
         <ModelSelectModal
@@ -1027,7 +1030,7 @@ function PrdContent() {
       )}
 
       {showTasks && (
-        <Modal isOpen onClose={closeTaskList} title="Task list" size="full">
+        <Modal isOpen onClose={closeTaskList} title={T.taskModal} size="full">
           <div className="flex min-w-0 flex-col gap-3">
             <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
               <SegmentedControl
@@ -1035,8 +1038,8 @@ function PrdContent() {
                 value={taskSource}
                 onChange={setTaskSource}
                 options={[
-                  { value: "plan", label: "From plan section", icon: "account_tree" },
-                  { value: "model", label: model ? `Ask ${model}` : "Ask model", icon: "smart_toy" },
+                  { value: "plan", label: T.fromPlan, icon: "account_tree" },
+                  { value: "model", label: T.askModel(model), icon: "smart_toy" },
                 ]}
               />
               {taskSource === "model" && (
@@ -1044,7 +1047,7 @@ function PrdContent() {
                   {taskRunning ? (
                     <span className="flex min-w-0 items-center gap-1 text-[11px] text-text-muted">
                       <span className="material-symbols-outlined text-[15px] animate-spin">progress_activity</span>
-                      Writing the list...
+                      {T.writingList}
                     </span>
                   ) : (
                     <Button
@@ -1054,12 +1057,12 @@ function PrdContent() {
                       onClick={handleAskModel}
                       disabled={!model || running || !markdown.trim()}
                     >
-                      {taskModelText.trim() ? "Ask again" : "Ask"}
+                      {taskModelText.trim() ? T.askAgain : T.ask}
                     </Button>
                   )}
                   {taskRunning && (
                     <Button size="sm" variant="ghost" icon="stop_circle" onClick={stopTaskRequest}>
-                      Stop
+                      {T.stop}
                     </Button>
                   )}
                 </div>
@@ -1067,22 +1070,22 @@ function PrdContent() {
             </div>
             {taskSource === "model" && !model && (
               <p className="min-w-0 break-words text-[11px] text-amber-500">
-                Pick a writer model first so there is something to ask.
+                {T.needWriterFirst}
               </p>
             )}
             {taskError && <p className="min-w-0 break-words text-[11px] text-red-500">{taskError}</p>}
             {taskSource === "plan" && taskPlan && !taskPlan.tasks.length && (
               <p className="min-w-0 break-words text-[11px] text-amber-500">
-                Nothing was found in a plan section here, so switch to the model tab and ask it to extract the tasks instead.
+                {T.noPlanFound}
               </p>
             )}
             {taskSource === "plan" && taskPlan && taskPlan.tasks.length > 0 && (
               <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-text-muted">
                 <span className="min-w-0 truncate">
-                  {taskPlan.tasks.length} {taskPlan.tasks.length === 1 ? "task" : "tasks"} in dependency order
+                  {T.tasksCount(taskPlan.tasks.length)}
                 </span>
                 {taskFollowUps > 0 && (
-                  <span className="min-w-0 truncate">{taskFollowUps} follow-up items</span>
+                  <span className="min-w-0 truncate">{T.followUps(taskFollowUps)}</span>
                 )}
                 {taskPlan.warnings.slice(0, 3).map((warning) => (
                   <span key={warning} className="min-w-0 break-words text-amber-500">
@@ -1107,8 +1110,8 @@ function PrdContent() {
                   </span>
                   <p className="max-w-sm text-xs text-text-muted">
                     {taskRunning
-                      ? "Asking the model now and the lines show up here as they arrive."
-                      : "No checklist yet — run the request and the model writes one from this document."}
+                      ? T.askingModel
+                      : T.noChecklist}
                   </p>
                 </div>
               )
@@ -1121,7 +1124,7 @@ function PrdContent() {
                 onClick={() => copy(taskText, "tasks")}
                 disabled={!taskText.trim()}
               >
-                Copy
+                {T.copy}
               </Button>
               <Button
                 variant="secondary"
@@ -1138,10 +1141,10 @@ function PrdContent() {
       )}
 
       {showPrompt && (
-        <Modal isOpen onClose={() => setShowPrompt(false)} title="Prompt sent to the model">
+        <Modal isOpen onClose={() => setShowPrompt(false)} title={T.promptModal}>
           <div className="flex min-w-0 flex-col gap-3">
             <p className="text-[11px] text-text-muted">
-              This is the exact instruction pair sent on Generate, so you can see how the document is specified.
+              {T.promptSub}
             </p>
             <pre
               className="max-h-[55vh] min-w-0 overflow-auto custom-scrollbar whitespace-pre-wrap break-words rounded-lg bg-black/5 dark:bg-white/5 p-3 font-mono text-[11px] leading-relaxed text-text-muted"
@@ -1150,7 +1153,7 @@ function PrdContent() {
             </pre>
             <div className="flex justify-end">
               <Button variant="secondary" size="sm" icon="content_copy" onClick={() => copy(promptPreview, "prompt")}>
-                Copy prompt
+                {T.copyPrompt}
               </Button>
             </div>
           </div>
@@ -1160,7 +1163,7 @@ function PrdContent() {
   );
 }
 
-function ModelSlot({ label, required, value, fallback, onPick, onClear }) {
+function ModelSlot({ label, required, value, fallback, onPick, onClear, pickHint }) {
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
       <div className="flex min-w-0 items-center justify-between gap-2">
@@ -1189,7 +1192,7 @@ function ModelSlot({ label, required, value, fallback, onPick, onClear }) {
             <span className="block truncate font-mono text-sm text-text-main">{value}</span>
           ) : (
             <span className="block truncate text-sm text-text-muted">
-              {fallback || "Pick the model that writes this PRD"}
+              {fallback || pickHint}
             </span>
           )}
         </span>

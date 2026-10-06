@@ -70,6 +70,7 @@ export default function InterviewPanel({ brief, language, uiLang = "id", model, 
       setError(st.needPickModel);
       return;
     }
+    if (loading) return; // cegah klik ganda: 1 ronde = 1 kartu
     setLoading(true);
     setError("");
     try {
@@ -79,7 +80,10 @@ export default function InterviewPanel({ brief, language, uiLang = "id", model, 
         apiKey,
         stream: false,
       }).then((r) => r.text);
-      setChat((prev) => [...prev, { round: roundIdx, text: String(text || "").trim() }]);
+      setChat((prev) => {
+        const cut = prev.filter((c) => c.round !== roundIdx); // ganti kartu lama ronde ini
+        return [...cut, { round: roundIdx, text: String(text || "").trim() }];
+      });
     } catch (err) {
       setError(err?.message || st.interviewFail);
     } finally {
@@ -128,7 +132,7 @@ export default function InterviewPanel({ brief, language, uiLang = "id", model, 
               disabled={disabled || loading || !model}
               onClick={() => ask(round)}
             >
-              {loading ? st.askingQ : chat.some((c) => c.round === round) ? st.askAgainQ : st.askQuestions}
+              {loading ? st.askingQ : st.askQuestions}
             </Button>
             {round < rounds.length - 1 ? (
               <Button size="sm" variant="primary" disabled={disabled || loading} onClick={() => setRound((r) => r + 1)}>

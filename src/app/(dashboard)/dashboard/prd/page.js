@@ -156,6 +156,7 @@ function PrdContent() {
   const [taskStage, setTaskStage] = useState("idle");
   const [taskError, setTaskError] = useState("");
   const [enrichedBrief, setEnrichedBrief] = useState("");
+  const [assistantBrief, setAssistantBrief] = useState("");
   const { copied, copy } = useCopyToClipboard(2000);
 
   const abortRef = useRef(null);
@@ -172,7 +173,10 @@ function PrdContent() {
     [outline, sectionsOn]
   );
   const running = stage === "drafting" || stage === "reviewing";
-  const effectiveBrief = enrichedBrief || brief;
+  const briefBase = (enrichedBrief || brief).trim();
+  const effectiveBrief = assistantBrief.trim()
+    ? (briefBase ? `${briefBase}\n\n[Asisten]\n${assistantBrief.trim()}` : assistantBrief.trim())
+    : (briefBase || "");
   const canGenerate = !!model && (!!effectiveBrief.trim() || !!form.product.trim()) && !running;
 
   useEffect(() => {
@@ -230,8 +234,8 @@ function PrdContent() {
       return next;
     });
     if (obj.brief) {
-      setBrief((prev) => (prev.trim() ? prev : obj.brief));
-      setEnrichedBrief((prev) => (prev ? `${prev}\n${obj.brief}` : obj.brief));
+      // brief milik user ga disentuh; hasil asisten punya slot sendiri (idempoten).
+      setAssistantBrief(obj.brief);
     }
     setShowDetails(true);
   };

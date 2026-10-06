@@ -543,3 +543,42 @@ export function sanitizeMarkdownHtml(html) {
     .replace(/(href|src)\s*=\s*(["'])\s*javascript:[^"']*\2/gi, '$1="#"')
     .replace(/(href|src)\s*=\s*javascript:[^\s>]*/gi, '$1="#"');
 }
+
+export const FILL_FIELDS = ["product","users","problem","stack","timeline","team","constraints","nonGoals","metrics","notes"];
+
+/** Mengubah transcript sesi asisten jadi isian form. */
+export function buildFillMessages({ transcript, current, language }) {
+  const langLine = language === "id"
+    ? "Tulis nilai dalam Bahasa Indonesia santai."
+    : "Write values in English.";
+  return [
+    {
+      role: "system",
+      content: [
+        "Kamu asisten pengisi form PRD. Dari transcript obrolan, isi field berikut.",
+        langLine,
+        "Output HANYA satu objek JSON valid, tanpa markdown fence, tanpa komentar.",
+        "Keys: brief (1-3 kalimat ide utuh) + product, users, problem, stack, timeline, team, constraints, nonGoals, metrics, notes.",
+        "Field yang tidak diketahui isi string kosong. Jangan halu: kosongkan daripada ngarang angka/nama.",
+        `Isian yang sudah ada (jangan rusak kecuali transcript mengubahnya): ${JSON.stringify(current || {})}`,
+      ].join("\n"),
+    },
+    { role: "user", content: `TRANSCRIPT:\n${transcript}` },
+  ];
+}
+
+/** Parse output model jadi objek aman (toleran fence + teks nyasar). */
+export function parseFillJson(text) {
+  const raw = String(text || "").trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
+  const start = raw.indexOf("{");
+  const end = raw.lastIndexOf("}");
+  if (start < 0 || end <= start) return {};
+  try {
+    const obj = JSON.parse(raw.slice(start, end + 1));
+    const out = {};
+    for (const k of [...FILL_FIELDS, "brief"]) {
+      if (typeof obj[k] === "string" && obj[k].trim()) out[k] = obj[k].trim().slice(0, 2000);
+    }
+    return out;
+  } catch { return {}; }
+}

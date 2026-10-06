@@ -36,6 +36,7 @@ import {
   renderTasksMarkdown,
 } from "./checklist.js";
 import InterviewPanel, { buildEnrichedBrief } from "./InterviewPanel.js";
+import AssistantFillPanel from "./AssistantFillPanel.js";
 import { STRINGS, UI_LANGS, DETAIL_FIELDS_ID, DETAIL_FIELDS_EN, TEMPLATE_ID, DEPTH_ID } from "./strings.js";
 
 marked.setOptions({ gfm: true, breaks: true });
@@ -219,6 +220,21 @@ function PrdContent() {
   }, [running]);
 
   const setField = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
+
+  const applyAssistantFill = (obj) => {
+    setForm((prev) => {
+      const next = { ...prev };
+      for (const k of ["product","users","problem","stack","timeline","team","constraints","nonGoals","metrics","notes"]) {
+        if (obj[k]) next[k] = obj[k];
+      }
+      return next;
+    });
+    if (obj.brief) {
+      setBrief((prev) => (prev.trim() ? prev : obj.brief));
+      setEnrichedBrief((prev) => (prev ? `${prev}\n${obj.brief}` : obj.brief));
+    }
+    setShowDetails(true);
+  };
 
   const loadDocs = useCallback(async () => {
     try {
@@ -630,6 +646,14 @@ function PrdContent() {
               </div>
             )}
           </Card>
+          <AssistantFillPanel
+            uiLang={uiLang}
+            docLang={language}
+            model={model}
+            apiKey={activeApiKey}
+            disabled={running}
+            onFill={applyAssistantFill}
+          />
         </div>
 
         <div className="flex min-w-0 flex-col gap-4">
@@ -915,13 +939,20 @@ function PrdContent() {
                 <p className="max-w-md text-xs text-text-muted">
                   {T.emptySub}
                 </p>
+                {!running && (
+                  <ol className="flex max-w-md flex-col gap-1 text-left text-xs text-text-muted">
+                    <li>1. {uiLang === "id" ? "Ceritakan idemu — lewat wawancara atau ngobrol dengan asisten." : "Tell your idea — via interview or assistant chat."}</li>
+                    <li>2. {uiLang === "id" ? "Pilih model penulis, tekan Bikin PRD." : "Pick a writer model, hit Generate."}</li>
+                    <li>3. {uiLang === "id" ? "Hasil muncul di sini + checklist bagian." : "The result lands here with a section checklist."}</li>
+                  </ol>
+                )}
               </div>
             )}
           </Card>
 
           <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-2">
           {markdown.trim() && !running && (
-            <Card padding="md" className="flex min-w-0 flex-col gap-3">
+            <Card padding="md" className="flex min-w-0 min-h-40 flex-col gap-3">
               <div className="flex min-w-0 items-center justify-between gap-2">
                 <h2 className="text-sm font-semibold text-text-main">{T.checklistTitle}</h2>
                 <span className="shrink-0 text-[11px] text-text-muted">
@@ -960,7 +991,7 @@ function PrdContent() {
             </Card>
           )}
 
-          <Card padding="md" className="flex min-w-0 flex-col gap-3">
+          <Card padding="md" className="flex min-w-0 min-h-40 flex-col gap-3">
             <div className="flex min-w-0 items-center justify-between gap-2">
               <h2 className="text-sm font-semibold text-text-main">{T.savedTitle}</h2>
               <span className="shrink-0 text-[11px] text-text-muted">{T.savedCount(docs.length)}</span>

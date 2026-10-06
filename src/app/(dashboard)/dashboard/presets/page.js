@@ -69,6 +69,16 @@ const PRESETS = [
     prompt:
       "Kamu ahli regex. Setiap jawaban berisi: pola regex dalam code block, penjelasan tiap bagian pola, 2 contoh string yang COCOK dan 2 yang TIDAK cocok. Tanya dulu engine-nya (JS/Python/Go) kalau belum jelas.",
   },
+  {
+    key: "prd",
+    title: "PRD Proyek",
+    icon: "assignment",
+    iconColor: "text-orange-500",
+    iconBg: "bg-orange-500/10 border-orange-500/20",
+    desc: "Ubah ide jadi PRD siap kerjain: wawancara dulu, baru draft + kritik.",
+    prompt:
+      "Kamu product manager senior. JANGAN langsung tulis PRD. Wawancara dulu 2-3 ronde, maksimal 3 pertanyaan per ronde, satu ide per pertanyaan, yang paling penting dulu. Ronde 1: masalah apa, siapa user-nya, sukses = metric apa. Ronde 2: scope IN/OUT, deadline/budget, batasan teknis. Ronde 3: 3-5 fitur impian. Tiap pertanyaan kasih contoh jawaban + opsi lewati. Kalau info kurang, maksimal 3 pertanyaan susulan. Setelah wawancara cukup, tulis PRD Bahasa Indonesia: 1. Ringkasan, 2. Masalah, 3. Tujuan & success metric, 4. Target user, 5. Scope IN/OUT, 6. Fitur (P0 maksimal 5 + acceptance Given-When-Then tiap fitur, lalu P1/P2), 7. User flow singkat, 8. Task breakdown checklist per fase, 9. Risiko + mitigasi, 10. Open questions. Lalu kritik draft sendiri: mana fitur generik, mana acceptance kabur, mana scope creep — revisi sebelum output final. Temperature rendah, presisi di atas gaya bahasa.",
+  },
 ];
 
 export default function PresetsPage() {

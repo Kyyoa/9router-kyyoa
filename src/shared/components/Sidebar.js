@@ -33,7 +33,6 @@ const navItems = [
 const workshopItems = [
   { href: "/dashboard/arena", label: "Battle Model", icon: "swords" },
   { href: "/dashboard/model-editor", label: "Custom Models", icon: "auto_awesome" },
-  { href: "/dashboard/presets", label: "Preset Prompts", icon: "library_books" },
   { href: "/dashboard/prd", label: "PRD Writer", icon: "description" },
   { href: "/dashboard/plugins", label: "Power-Ups", icon: "widgets" },
 ];

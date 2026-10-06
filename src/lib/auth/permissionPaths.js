@@ -133,7 +133,6 @@ const PAGE_PERMISSION_RULES = [
   { prefix: "/dashboard/combos", permissions: ["manageModels"] },
   { prefix: "/dashboard/model-editor", permissions: ["manageModels"] },
   { prefix: "/dashboard/arena", permissions: ["manageModels"] },
-  { prefix: "/dashboard/presets", permissions: ["manageModels"] },
   { prefix: "/dashboard/prd", permissions: ["manageModels"] },
   { prefix: "/dashboard/cli-tools", permissions: ["manageTools"] },
   { prefix: "/dashboard/token-saver", permissions: ["manageTools"] },

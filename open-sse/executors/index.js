@@ -63,8 +63,10 @@ const executors = {
   commandcode: new CommandCodeExecutor(),
   "xiaomi-tokenplan": new XiaomiTokenplanExecutor(),
   "xiaomi-mimo": new XiaomiMimoExecutor(),
+  mimocode: new MimoFreeExecutor(), // MiMoCode free channel (anonymous JWT)
+  "mimocode-free": new MimoFreeExecutor(), // Alias for mimocode
+  mmf: new MimoFreeExecutor(), // Retired id for the same channel
   "mimo-free": new MimoFreeExecutor(),
-  mmf: new MimoFreeExecutor(), // Alias for mimo-free
   "codebuddy-cn": new CodeBuddyExecutor(),
   "codebuddy-intl": new CodeBuddyIntlExecutor(),
   trae: new TraeExecutor(),

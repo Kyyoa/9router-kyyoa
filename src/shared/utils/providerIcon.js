@@ -2,6 +2,8 @@
 // Alias related brands; session-cache 404s so one miss never spams again.
 
 const ICON_ALIASES = {
+  mimocode: "xiaomi-mimo",
+  "opencode-zen": "opencode",
   "perplexity-agent": "perplexity",
   "gitlab-duo": "gitlab",
   "vercel-ai-gateway": "vercel",

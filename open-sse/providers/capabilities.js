@@ -83,8 +83,13 @@ export function capabilitiesFromServiceKind(kind) {
  * otherwise mis-match. Only declare deltas vs DEFAULT.
  */
 export const MODEL_CAPABILITIES = {
-  // Claude Fable 5.1, Opus 5, 4.6/4.7/4.8, and Kiro Sonnet 5 have 1M context + adaptive thinking (override generic claude pattern)
+  // Claude Fable 5.1, Opus 5.5/5, 4.6/4.7/4.8, and Kiro Sonnet 5 have 1M context + adaptive thinking (override generic claude pattern)
   "claude-fable-5-1": { vision: true, reasoning: true, search: true, thinkingFormat: "claude-adaptive", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 128000 },
+  // Claude Opus 5.5 — experimental preview on Kiro (rateMultiplier: 2.0, 1M context) (#4410)
+  "claude-opus-5.5":                   { vision: true, reasoning: true, search: true, thinkingFormat: "claude-adaptive", contextWindow: 1000000, maxOutput: 128000 },
+  "claude-opus-5.5-thinking":          { vision: true, reasoning: true, search: true, thinkingFormat: "claude-adaptive", contextWindow: 1000000, maxOutput: 128000 },
+  "claude-opus-5.5-agentic":           { vision: true, reasoning: true, search: true, thinkingFormat: "claude-adaptive", contextWindow: 1000000, maxOutput: 128000 },
+  "claude-opus-5.5-thinking-agentic":  { vision: true, reasoning: true, search: true, thinkingFormat: "claude-adaptive", contextWindow: 1000000, maxOutput: 128000 },
   "claude-opus-5":     { vision: true, reasoning: true, search: true, thinkingFormat: "claude-adaptive", contextWindow: 1000000, maxOutput: 128000 },
   "claude-opus-5-thinking": { vision: true, reasoning: true, search: true, thinkingFormat: "claude-adaptive", contextWindow: 1000000, maxOutput: 128000 },
   "claude-opus-5-agentic": { vision: true, reasoning: true, search: true, thinkingFormat: "claude-adaptive", contextWindow: 1000000, maxOutput: 128000 },
@@ -99,6 +104,8 @@ export const MODEL_CAPABILITIES = {
   "claude-opus-4-8-thinking": { vision: true, reasoning: true, search: true, thinkingFormat: "claude-adaptive", contextWindow: 1000000, maxOutput: 128000 },
   "claude-sonnet-4.6": { vision: true, reasoning: true, search: true, thinkingFormat: "claude-adaptive", contextWindow: 1000000, maxOutput: 128000 },
   "claude-sonnet-4-6": { vision: true, reasoning: true, search: true, thinkingFormat: "claude-adaptive", contextWindow: 1000000, maxOutput: 128000 },
+  // Sonnet 5.5 rejects thinking.type "disabled" (use "between_tools") and forced tool_choice (any/tool).
+  "claude-sonnet-5-5-thinking": { vision: true, reasoning: true, search: true, thinkingFormat: "claude-adaptive", contextWindow: 1000000, maxOutput: 128000 },
   "claude-sonnet-5": { vision: true, reasoning: true, search: true, thinkingFormat: "claude-adaptive", contextWindow: 1000000, maxOutput: 128000 },
   "claude-sonnet-5-thinking": { vision: true, reasoning: true, search: true, thinkingFormat: "claude-adaptive", contextWindow: 1000000, maxOutput: 128000 },
   "claude-sonnet-5-agentic": { vision: true, reasoning: true, search: true, thinkingFormat: "claude-adaptive", contextWindow: 1000000, maxOutput: 128000 },
@@ -153,6 +160,7 @@ const KIRO_GPT_5_6_CAPABILITIES = { vision: true, reasoning: true, search: true,
 // (lower than OpenAI API's 1.05M). Sol differs from Terra/Luna. #2720
 const CODEX_GPT_56_SOL_CAPS  = { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 372000, maxOutput: 128000 };
 const CODEX_GPT_56_DEFAULT_CAPS = { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 272000, maxOutput: 128000 };
+const CODEX_EXTENDED_CAPS = { ...CODEX_GPT_56_DEFAULT_CAPS, contextWindow: 872000 };
 
 /**
  * Provider-specific capability overrides. Keyed by provider alias/id.
@@ -175,6 +183,14 @@ export const PROVIDER_CAPABILITIES = {
   },
   "codex": {
     "gpt-6-astra":               { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 272000, maxOutput: 128000 },
+    "gpt-6-sol":                 { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 272000, maxOutput: 128000 },
+    "gpt-6-luna":                { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 272000, maxOutput: 128000 },
+    "gpt-6-astra[1m]":           CODEX_EXTENDED_CAPS,
+    "gpt-6-sol[1m]":             CODEX_EXTENDED_CAPS,
+    "gpt-6-luna[1m]":            CODEX_EXTENDED_CAPS,
+    "gpt-5.6-sol[1m]":           CODEX_EXTENDED_CAPS,
+    "gpt-5.6-terra[1m]":         CODEX_EXTENDED_CAPS,
+    "gpt-5.6-luna[1m]":          CODEX_EXTENDED_CAPS,
     "gpt-5.6-sol":               CODEX_GPT_56_SOL_CAPS,
     "gpt-5.6-sol-review":        CODEX_GPT_56_SOL_CAPS,
     "gpt-5.6-terra":             CODEX_GPT_56_DEFAULT_CAPS,
@@ -270,6 +286,7 @@ export const PROVIDER_CAPABILITIES = {
 // Qoder CN serves the identical model catalog from the CN gateway, so it shares
 // the intl Qoder capability table verbatim (vision/reasoning/contextWindow).
 PROVIDER_CAPABILITIES["qoder-cn"] = PROVIDER_CAPABILITIES["qoder"];
+PROVIDER_CAPABILITIES.cx = PROVIDER_CAPABILITIES.codex;
 
 /**
  * Pattern fallback — glob (* = wildcard), matched case-insensitively and

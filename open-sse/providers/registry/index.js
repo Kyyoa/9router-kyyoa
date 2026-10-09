@@ -58,11 +58,11 @@ import p53b from "./kimi-web.js";
 import p54 from "./kiro.js";
 import p55 from "./linkup.js";
 import p56 from "./local-device.js";
-import p57 from "./mimo-free.js";
+import p57 from "./mimocode.js";
 import p58 from "./minimax-cn.js";
 import p59 from "./minimax.js";
 import p60 from "./mistral.js";
-import p61 from "./mmf.js";
+import p125 from "./muse.js";
 import p62 from "./nanobanana.js";
 import p63 from "./nebius.js";
 import p64 from "./nvidia.js";
@@ -126,6 +126,13 @@ import p119 from "./selfhosted-embedding.js";
 import p120 from "./fish-audio.js";
 import p121 from "./alitp-intl.js";
 import p122 from "./xquik.js";
+import p126 from "./agnes.js";
+import p127 from "./atria.js";
+import p128 from "./bai.js";
+import p129 from "./dahl.js";
+import p130 from "./tinyfish.js";
+import p131 from "./tokenharbor.js";
+import p132 from "./v1m.js";
 export default [
   p0,
   p1,
@@ -190,7 +197,7 @@ export default [
   p58,
   p59,
   p60,
-  p61,
+  p125,
   p62,
   p63,
   p64,
@@ -252,4 +259,11 @@ export default [
   p120,
   p121,
   p122,
+  p126,
+  p127,
+  p128,
+  p129,
+  p130,
+  p131,
+  p132,
 ];

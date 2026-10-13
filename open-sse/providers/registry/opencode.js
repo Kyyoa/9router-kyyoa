@@ -21,6 +21,12 @@ export default {
   noAuth: true,
   // unavailable: true — semua model otomatis diblokir di model picker
   unavailable: true,
+  unavailableReason:
+    "OpenCode Free diblokir upstream kecuali user punya akun organisasi OpenCode. "
+    + "Header spoof (x-opencode-client / ses_ / fingerprint tools) sudah lengkap tapi "
+    + "tidak cukup — OpenCode mensyyaratkan org/workspace association yang hanya tersedia "
+    + "lewat native OpenCode desktop app (lihat variabel env OPENCODE_PID di server). "
+    + "Pakai OpenCode Go (bayar) dengan API key dari opencode.ai/auth, atau OpenCode Zen (PAYG).",
   transport: {
     baseUrl: "https://opencode.ai",
     headers: {

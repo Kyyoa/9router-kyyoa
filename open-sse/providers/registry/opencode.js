@@ -9,9 +9,18 @@ export default {
     icon: "terminal",
     color: "#E87040",
     textIcon: "OC",
+    // OpenCode free tier diblokir upstream sejak Oct 2026 (FreeTierError 403)
+    // untuk semua POST request dari luar aplikasi native mereka.
+    // OpenCode Go (berbayar) masih jalan — tambahkan di provider opencode-go.
+    notice: {
+      text: "OpenCode Free tidak dapat digunakan melalui gateway eksternal. OpenCode memblokir semua request di luar aplikasi resmi mereka (FreeTierError 403). Gunakan OpenCode Go (opencode-go) dengan subscription $5/mo, atau pilih provider gratis lain.",
+      type: "error",
+    },
   },
   category: "free",
   noAuth: true,
+  // unavailable: true — semua model otomatis diblokir di model picker
+  unavailable: true,
   transport: {
     baseUrl: "https://opencode.ai",
     headers: {

@@ -1,14 +1,14 @@
 import { PROVIDER_MODELS, PROVIDER_ID_TO_ALIAS, getModelKind } from "@/shared/constants/models";
 import {
+  ALIAS_TO_ID,
   AI_PROVIDERS,
   getProviderAlias,
   isAnthropicCompatibleProvider,
   isOpenAICompatibleProvider,
 } from "@/shared/constants/providers";
-import { getProviderConnections, getCombos, getCustomModels, getModelAliases, getStudioModels } from "@/lib/localDb";
-import { getAllowedModelsOfKey, matchesAllowedModels } from "@/lib/db/repos/apiKeysRepo.js";
+import { getProviderConnections, getCombos, getCustomModels, getModelAliases } from "@/lib/localDb";
 import { getDisabledModels } from "@/lib/disabledModelsDb";
-import { buildStudioTargetIndex } from "@/shared/utils/studioModelVisibility";
+import { getKeyAccessContext, filterModelsListForKey } from "@/sse/services/keyAccess.js";
 import { resolveKiroModels } from "open-sse/services/kiroModels.js";
 import { resolveKimchiModels } from "open-sse/services/kimchiModels.js";
 import { resolveQoderModels, routableQoderModels } from "open-sse/services/qoderModels.js";
@@ -40,6 +40,22 @@ async function resolveQoderLiveModels(conn, provider) {
   const models = routableQoderModels(result);
   if (!models.length) return null;
   return { models: models.map((m) => ({ id: m.id, name: m.name })) };
+}
+
+// Combo seats use UI aliases; the model registry also has transport aliases.
+// Capability overrides and catalog limits are keyed by provider id.
+const ALIAS_TO_PROVIDER_ID = {
+  ...Object.fromEntries(
+    Object.entries(PROVIDER_ID_TO_ALIAS).map(([id, alias]) => [alias, id])
+  ),
+  ...ALIAS_TO_ID,
+};
+
+function comboSeatCapabilities(seat) {
+  const slash = seat.indexOf("/");
+  if (slash <= 0) return null;
+  const alias = seat.slice(0, slash);
+  return getCapabilitiesForModel(ALIAS_TO_PROVIDER_ID[alias] || alias, seat.slice(slash + 1));
 }
 
 // Per-provider live model resolvers. Each receives a connection record and
@@ -256,11 +272,45 @@ function comboMatchesKinds(combo, kindFilter) {
   return kindFilter.includes(kind);
 }
 
-/** The caller's API key, from either header; empty when the request carries none. */
-function readCallerApiKey(request) {
- const auth = String(request?.headers?.get("authorization") || "");
- const bearer = auth.match(/^Bearer\s+(.+)$/i);
- return (bearer?.[1] || request?.headers?.get("x-api-key") || "").trim() || null;
+// Nested combo names are valid seats — the model selector exposes them and
+// chat routing resolves them recursively — but a no-slash seat is otherwise
+// treated as a literal model and publishes the 200k floor. Expand nested
+// names (cycle-guarded) so the published window is the true min across the
+// whole chain.
+function comboSeatLimits(combo, combosByName, visiting = new Set()) {
+  const name = typeof combo?.name === "string" ? combo.name : null;
+  if (name) {
+    if (visiting.has(name)) return { contextWindow: undefined, maxOutput: undefined };
+    visiting.add(name);
+  }
+
+  let contextWindow = Infinity;
+  let maxOutput = Infinity;
+  try {
+    for (const seat of Array.isArray(combo?.models) ? combo.models : []) {
+      if (typeof seat !== "string") continue;
+      const slash = seat.indexOf("/");
+      if (slash <= 0) {
+        const nested = combosByName.get(seat);
+        if (nested) {
+          const nestedLimits = comboSeatLimits(nested, combosByName, visiting);
+          if (Number.isFinite(nestedLimits.contextWindow)) contextWindow = Math.min(contextWindow, nestedLimits.contextWindow);
+          if (Number.isFinite(nestedLimits.maxOutput)) maxOutput = Math.min(maxOutput, nestedLimits.maxOutput);
+          continue;
+        }
+      }
+      const caps = comboSeatCapabilities(seat) || getCapabilitiesForModel(null, seat);
+      if (Number.isFinite(caps?.contextWindow)) contextWindow = Math.min(contextWindow, caps.contextWindow);
+      if (Number.isFinite(caps?.maxOutput)) maxOutput = Math.min(maxOutput, caps.maxOutput);
+    }
+  } finally {
+    if (name) visiting.delete(name);
+  }
+
+  return {
+    contextWindow: Number.isFinite(contextWindow) ? contextWindow : undefined,
+    maxOutput: Number.isFinite(maxOutput) ? maxOutput : undefined,
+  };
 }
 
 /**
@@ -268,13 +318,10 @@ function readCallerApiKey(request) {
  * @param {string[]} kindFilter - List of service kinds to include (e.g. ["llm"], ["webSearch","webFetch"]).
  */
 export async function buildModelsList(kindFilter, options = {}) {
- // A restricted API key only ever sees the models it may actually call, so the
- // listing can never promise a model the request gate would refuse.
- const callerPatterns = await getAllowedModelsOfKey(readCallerApiKey(options.request));
- // When this header is present, the /v1/models request came from another
- // 9router instance's fetchCompatibleModelIds — skip dynamic fetch to break
- // cross-instance recursive loops.
- const skipDynamicFetch = options.skipDynamicFetch === true;
+  // When this header is present, the /v1/models request came from another
+  // 9router instance's fetchCompatibleModelIds — skip dynamic fetch to break
+  // cross-instance recursive loops.
+  const skipDynamicFetch = options.skipDynamicFetch === true;
   let connections = [];
   try {
     connections = await getProviderConnections();
@@ -304,26 +351,13 @@ export async function buildModelsList(kindFilter, options = {}) {
     console.log("Could not fetch model aliases");
   }
 
-  
-  let studioModels = [];
-  try {
-    studioModels = await getStudioModels();
-  } catch (e) {
-    console.log("Could not fetch model studio models");
-  }
-  // Studio names are records of their own now; a leftover alias carrying one would
-  // list the same model twice under two different names.
-  const studioNames = new Set(studioModels.map((s) => String(s.callName).toLowerCase()));
- let disabledByAlias = {};
+  let disabledByAlias = {};
   try {
     disabledByAlias = await getDisabledModels();
   } catch (e) {
     console.log("Could not fetch disabled models");
   }
   const isDisabled = (alias, modelId) => Array.isArray(disabledByAlias[alias]) && disabledByAlias[alias].includes(modelId);
-
-  // A studio name hides the model it points at, everywhere it would be listed.
-  const studioTargets = buildStudioTargetIndex(studioModels);
 
   const activeConnectionByProvider = new Map();
   for (const conn of connections) {
@@ -333,6 +367,9 @@ export async function buildModelsList(kindFilter, options = {}) {
   }
 
   const models = [];
+  const combosByName = new Map(
+    combos.filter((c) => typeof c?.name === "string").map((c) => [c.name, c]),
+  );
 
   // Lookup map so aggregateComboCapabilities can recursively resolve nested combos
   const comboByName = Object.fromEntries(combos.map((c) => [c.name, c.models]));
@@ -348,59 +385,33 @@ export async function buildModelsList(kindFilter, options = {}) {
     if (combo.kind === "webSearch" || combo.kind === "webFetch") {
       entry.kind = combo.kind;
     } else {
-      const comboCaps = aggregateComboCapabilities(combo.models, comboByName, 0, Number(combo.contextWindow) || 0);
-      if (comboCaps) {
-        entry.capabilities = comboCaps;
-        // Same reason single models publish it: a client that only reads
-        // context_length must not fall back to guessing the window from the name.
-        if (Number.isFinite(comboCaps.contextWindow)) entry.context_length = comboCaps.contextWindow;
-        if (Number.isFinite(comboCaps.maxOutput)) entry.max_completion_tokens = comboCaps.maxOutput;
-      }
+      const comboCaps = aggregateComboCapabilities(combo.models, comboByName, comboSeatCapabilities);
+      if (comboCaps) entry.capabilities = comboCaps;
+      // Any seat can serve the request, so the only window a combo can promise is
+      // its smallest. Combo entries were the only models on this endpoint that
+      // published no limits at all, which leaves a client to guess from the name —
+      // and it guesses high (see the snake_case note on the per-provider path).
+      const { contextWindow, maxOutput } = comboSeatLimits(combo, combosByName);
+      if (Number.isFinite(contextWindow)) entry.context_length = contextWindow;
+      if (Number.isFinite(maxOutput)) entry.max_completion_tokens = maxOutput;
     }
-    models.push(entry);
-  }
-  
-  // Custom model (studio) names are user-defined callable IDs (alias + per-model overrides).
-  for (const studio of studioModels) {
-    if (!kindFilter.includes(LLM_KIND)) continue;
-    const entry = {
-      id: studio.callName,
-      object: "model",
-      owned_by: "model-studio",
-      resolved_model: studio.targetModel,
-    };
-    const caps = getCapabilitiesForModel(studio.provider, studio.model);
-    if (caps) entry.capabilities = caps;
-    const contextWindow = Number(studio.contextWindow) || caps?.contextWindow;
-    if (Number.isFinite(contextWindow)) entry.context_length = contextWindow;
-    if (Number.isFinite(caps?.maxOutput)) entry.max_completion_tokens = caps.maxOutput;
     models.push(entry);
   }
 
   if (connections.length === 0) {
     // DB unavailable -> return static models, filtered by per-model kind
-    const aliasToProviderId = Object.fromEntries(
-      Object.entries(PROVIDER_ID_TO_ALIAS).map(([id, alias]) => [alias, id])
-    );
     for (const [alias, providerModels] of Object.entries(PROVIDER_MODELS)) {
-      const providerId = aliasToProviderId[alias] || alias;
+      const providerId = ALIAS_TO_PROVIDER_ID[alias] || alias;
       if (!providerMatchesKinds(providerId, kindFilter)) continue;
       for (const model of providerModels) {
         if (!kindFilter.includes(modelKind(model))) continue;
         if (isDisabled(alias, model.id)) continue;
-        if (studioTargets.isStudioTarget([providerId, alias], model.id)) continue;
-        const staticCaps = getCapabilitiesForModel(alias, model.id);
-        const staticEntry = {
+        models.push({
           id: `${alias}/${model.id}`,
           object: "model",
           owned_by: alias,
-        };
-        if (staticCaps) staticEntry.capabilities = staticCaps;
-        // Top-level snake_case limits: clients matching context_length don't
-        // recurse into the nested capabilities block (matches the live-connection path).
-        if (Number.isFinite(staticCaps?.contextWindow)) staticEntry.context_length = staticCaps.contextWindow;
-        if (Number.isFinite(staticCaps?.maxOutput)) staticEntry.max_completion_tokens = staticCaps.maxOutput;
-        models.push(staticEntry);
+          capabilities: getCapabilitiesForModel(alias, model.id),
+        });
       }
     }
 
@@ -413,22 +424,12 @@ export async function buildModelsList(kindFilter, options = {}) {
 
       const modelId = String(customModel.id).trim();
       if (!modelId) continue;
-      if (studioTargets.isStudioTarget(providerAlias, modelId)) continue;
 
-      // Custom models used to publish bare {id,object,owned_by} — a client then
-      // guessed the window from the name and read a 1M model as higher, never
-      // hitting compaction and hard-failing upstream. Publish caps + limits
-      // like every other branch.
-      const customCaps = getCapabilitiesForModel(providerAlias, modelId);
-      const customEntry = {
+      models.push({
         id: `${providerAlias}/${modelId}`,
         object: "model",
         owned_by: providerAlias,
-      };
-      if (customCaps) customEntry.capabilities = customCaps;
-      if (Number.isFinite(customCaps?.contextWindow)) customEntry.context_length = customCaps.contextWindow;
-      if (Number.isFinite(customCaps?.maxOutput)) customEntry.max_completion_tokens = customCaps.maxOutput;
-      models.push(customEntry);
+      });
     }
   } else {
     for (const [providerId, conn] of activeConnectionByProvider.entries()) {
@@ -526,9 +527,7 @@ export async function buildModelsList(kindFilter, options = {}) {
         })
         .filter((modelId) => modelId !== "");
 
-      const aliasModelIds = Object.entries(modelAliases || {})
- .filter(([aliasName]) => !studioNames.has(String(aliasName).toLowerCase()))
- .map(([, fullModel]) => fullModel)
+      const aliasModelIds = Object.values(modelAliases || {})
         .filter((fullModel) => {
           if (typeof fullModel !== "string" || !fullModel.includes("/")) return false;
           return (
@@ -562,8 +561,6 @@ export async function buildModelsList(kindFilter, options = {}) {
         const allowAsLlm = kind === "imageToText" && kindFilter.includes(LLM_KIND);
         if (!kindFilter.includes(kind) && !allowAsLlm) continue;
         if (isDisabled(outputAlias, modelId) || isDisabled(staticAlias, modelId)) continue;
-        // Hidden behind a studio name: only the studio name is published.
-        if (studioTargets.isStudioTarget([providerId, staticAlias, outputAlias], modelId)) continue;
 
         const model = {
           id: `${outputAlias}/${modelId}`,
@@ -631,9 +628,7 @@ export async function buildModelsList(kindFilter, options = {}) {
     dedupedModels.push(model);
   }
 
-  // Same patterns the request gate applies: an unrestricted key still sees everything.
- if (!callerPatterns) return dedupedModels;
- return dedupedModels.filter((model) => matchesAllowedModels(callerPatterns, model.id));
+  return dedupedModels;
 }
 
 /**
@@ -657,7 +652,10 @@ export async function GET(request) {
   try {
     // Detect cross-instance recursive /models fetch (another 9router fetching our /models)
     const skipDynamicFetch = request?.headers?.get(INTERNAL_MODELS_FETCH_HEADER) === "1";
-    const data = await buildModelsList([LLM_KIND], { skipDynamicFetch, request });
+    const data = await filterModelsListForKey(
+      await getKeyAccessContext(request),
+      await buildModelsList([LLM_KIND], { skipDynamicFetch })
+    );
     return Response.json({ object: "list", data }, {
       headers: { "Access-Control-Allow-Origin": "*" },
     });

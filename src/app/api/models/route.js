@@ -5,8 +5,14 @@ import { getSettings } from "@/lib/localDb";
 import { AI_MODELS } from "@/shared/constants/config";
 import { getProviderAlias } from "@/shared/constants/providers";
 import { getCapabilitiesForModel } from "open-sse/providers/capabilities.js";
+import { fetchSuggestedModelsServer } from "@/app/api/providers/suggested-models/filters.js";
+import { FREE_PROVIDERS as FREE_PROVIDER_REGISTRY } from "@/shared/constants/providers.js";
 
-// GET /api/models - Get models with aliases
+// GET /api/models - Get models with aliases. Always dynamic: plugin badges
+// (vision/thinkDeeper/jsonGuard/...) come from settings, which a prerendered
+// response would freeze at whatever the settings were during the build.
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     const modelAliases = await getModelAliases();
@@ -17,10 +23,49 @@ export async function GET() {
     const ivModels = new Set(customPlugins.imageVision?.models || []);
     const tdEnabled = Boolean(customPlugins.thinkDeeper?.enabled);
     const tdModels = new Set(customPlugins.thinkDeeper?.models || []);
-    const umEnabled = Boolean(customPlugins.unrestrictedMode?.enabled);
-    const umModels = new Set(customPlugins.unrestrictedMode?.models || []);
     const smEnabled = Boolean(customPlugins.speedMode?.enabled);
     const smModels = new Set(customPlugins.speedMode?.models || []);
+    const jgEnabled = Boolean(customPlugins.jsonGuard?.enabled);
+    const jgModels = new Set(customPlugins.jsonGuard?.models || []);
+    const csEnabled = Boolean(customPlugins.contextSqueezer?.enabled);
+    const csModels = new Set(customPlugins.contextSqueezer?.models || []);
+    const otbEnabled = Boolean(customPlugins.openaiToolBridge?.enabled);
+    const otbModels = new Set(customPlugins.openaiToolBridge?.models || []);
+    const asEnabled = Boolean(customPlugins.antiSlop?.enabled);
+    const asModels = new Set(customPlugins.antiSlop?.models || []);
+
+    // One resolver for every branch below. It used to be five copies of the same
+    // five statements, so any change had to be made five times and a missed copy
+    // surfaced as a plugin mark that appeared in one view and not another.
+    const PLUGIN_SOURCES = [
+      ["imageVision", ivEnabled, ivModels, { vision: true, imageVision: true }],
+      ["thinkDeeper", tdEnabled, tdModels, { reasoning: true, thinkDeeper: true }],
+      ["speedMode", smEnabled, smModels, { speedMode: true }],
+      ["jsonGuard", jgEnabled, jgModels, { jsonGuard: true }],
+      ["contextSqueezer", csEnabled, csModels, { contextSqueezer: true }],
+      ["openaiToolBridge", otbEnabled, otbModels, { openaiToolBridge: true }],
+      ["antiSlop", asEnabled, asModels, { antiSlop: true }],
+    ];
+
+    /**
+     * Turn on the plugins whose model list matches this entry and return the
+     * keys that matched. `ids` is every shape the model may be listed under
+     * (full model, routed model, the caller's own id).
+     *
+     * Image Vision sets BOTH caps.vision (vision-gated UI depends on it) and
+     * caps.imageVision. Setting only caps.vision was the original bug: it is
+     * indistinguishable from native vision, so the plugin drew no mark.
+     */
+    const applyPluginMarks = (caps, ids) => {
+      const marks = [];
+      for (const [key, enabled, models, effect] of PLUGIN_SOURCES) {
+        if (!enabled) continue;
+        if (!ids.some((id) => id && models.has(id))) continue;
+        marks.push(key);
+        Object.assign(caps, effect);
+      }
+      return marks;
+    };
 
     const models = AI_MODELS
       .filter((m) => {
@@ -40,30 +85,60 @@ export async function GET() {
           contextWindow: c.contextWindow,
           maxOutput: c.maxOutput,
         };
-        if (ivEnabled && (ivModels.has(fullModel) || ivModels.has(routedModel) || ivModels.has(m.model))) {
-          caps.vision = true;
-        }
-        if (tdEnabled && (tdModels.has(fullModel) || tdModels.has(routedModel) || tdModels.has(m.model))) {
-          caps.reasoning = true;
-          caps.thinkDeeper = true;
-        }
-        if (umEnabled && (umModels.has(fullModel) || umModels.has(routedModel) || umModels.has(m.model))) {
-          caps.unrestrictedMode = true;
-        }
-        if (smEnabled && (smModels.has(fullModel) || smModels.has(routedModel) || smModels.has(m.model))) {
-          caps.speedMode = true;
-        }
+        const pluginMarks = applyPluginMarks(caps, [fullModel, routedModel, m.model]);
         return {
           ...m,
           fullModel,
           routedModel,
           alias: modelAliases[fullModel] || m.model,
           caps,
+        pluginMarks,
         };
       });
 
-    // Custom models ride along; their stored caps override the name heuristic
+    // Custom-model ids and live-catalogue ids both live in this set.
     const seenFull = new Set(models.map((m) => m.fullModel));
+
+    // Free no-auth providers publish a live catalogue (OpenCode Free moves weekly).
+    // Registry entries above are curated, so anything upstream adds is merged in
+    // here; without this the picker would only ever show what the build captured.
+    const liveFree = await Promise.all(
+      Object.entries(FREE_PROVIDER_REGISTRY)
+        .filter(([, p]) => p.noAuth && !p.hidden && p.modelsFetcher)
+        .map(async ([id, p]) => [p.alias || id, p.modelsFetcher, await fetchSuggestedModelsServer(p.modelsFetcher)])
+    );
+    const addedLive = [];
+    for (const [alias, , liveModels] of liveFree) {
+      for (const live of liveModels) {
+        const fullModel = `${alias}/${live.id}`;
+        if (seenFull.has(fullModel)) continue;
+        seenFull.add(fullModel);
+        const c = getCapabilitiesForModel(alias, live.id);
+        const caps = {
+          vision: c.vision,
+          search: c.search,
+          reasoning: c.reasoning,
+          contextWindow: c.contextWindow ?? live.contextLength,
+          maxOutput: c.maxOutput,
+        };
+        const pluginMarks = applyPluginMarks(caps, [fullModel, live.id]);
+        const entry = {
+          provider: alias,
+          model: live.id,
+          name: live.name || live.id,
+          fullModel,
+          routedModel: fullModel,
+          alias: modelAliases[fullModel] || live.id,
+          caps,
+        pluginMarks,
+          liveSuggested: true,
+        };
+        models.push(entry);
+        addedLive.push(entry);
+      }
+    }
+
+    // Custom models ride along; their stored caps override the name heuristic
     const customModels = (await getCustomModels()).filter((m) => {
       if (!m?.id || (m.kind || m.type || "llm") !== "llm") return false;
       return !seenFull.has(`${m.providerAlias}/${m.id}`);
@@ -79,19 +154,7 @@ export async function GET() {
         maxOutput: c.maxOutput,
         ...(m.caps || {}),
       };
-      if (ivEnabled && (ivModels.has(fullModel) || ivModels.has(m.id))) {
-        caps.vision = true;
-      }
-      if (tdEnabled && (tdModels.has(fullModel) || tdModels.has(m.id))) {
-        caps.reasoning = true;
-        caps.thinkDeeper = true;
-      }
-      if (umEnabled && (umModels.has(fullModel) || umModels.has(m.id))) {
-        caps.unrestrictedMode = true;
-      }
-      if (smEnabled && (smModels.has(fullModel) || smModels.has(m.id))) {
-        caps.speedMode = true;
-      }
+      const pluginMarks = applyPluginMarks(caps, [fullModel, m.id]);
       models.push({
         provider: m.providerAlias,
         model: m.id,
@@ -100,6 +163,7 @@ export async function GET() {
         routedModel: fullModel,
         alias: modelAliases[fullModel] || m.id,
         caps,
+        pluginMarks,
       });
     }
 
@@ -131,12 +195,16 @@ export async function GET() {
         caps.reasoning = true;
         caps.thinkDeeper = true;
       }
-      if (umEnabled && names.some((n) => umModels.has(n))) {
-        caps.unrestrictedMode = true;
-      }
       if (smEnabled && names.some((n) => smModels.has(n))) {
         caps.speedMode = true;
       }
+      if (jgEnabled && names.some((n) => jgModels.has(n))) {
+        caps.jsonGuard = true;
+      }
+      if (csEnabled && names.some((n) => csModels.has(n))) {
+        caps.contextSqueezer = true;
+      }
+      const pluginMarks = applyPluginMarks(caps, names);
       models.push({
         provider: s.provider,
         model: s.callName,
@@ -145,39 +213,45 @@ export async function GET() {
         routedModel: s.callName,
         alias: s.callName,
         caps,
+        pluginMarks,
         isStudio: true,
       });
     }
 
-    // Combos: aggregate the caps of their member models (worst-case window,
-    // OR-ed boolean capabilities) so a combo chip answers for its badge too.
+    // Combos: aggregate the caps of their member models so a combo chip answers for
+    // its badge and its window too. The same aggregator the public models list uses,
+    // so a combo never reports a different window in two places.
     const { getCombos } = await import("@/lib/localDb");
+    const { aggregateComboCapabilities } = await import("open-sse/providers/capabilities.js");
     let combos = [];
     try {
       combos = await getCombos();
     } catch {
       combos = [];
     }
-    const capsByAnyKey = models.reduce((acc, m) => {
-      if (m.fullModel) acc[m.fullModel] = m.caps;
-      if (m.routedModel) acc[m.routedModel] = m.caps;
-      if (m.model) acc[m.model] = m.caps;
-      return acc;
-    }, {});
+    const comboByName = {};
+    for (const combo of combos) {
+      if (Array.isArray(combo.models) && combo.models.length) comboByName[combo.name] = combo.models;
+    }
     for (const combo of combos) {
       const members = Array.isArray(combo.models) ? combo.models : [];
-      const memberCaps = members.map((name) => capsByAnyKey[name]).filter(Boolean);
-      if (memberCaps.length === 0) continue;
-      const caps = {
-        vision: memberCaps.some((c) => c.vision),
-        search: memberCaps.some((c) => c.search),
-        reasoning: memberCaps.some((c) => c.reasoning),
-        thinkDeeper: memberCaps.some((c) => c.thinkDeeper),
-        unrestrictedMode: memberCaps.some((c) => c.unrestrictedMode),
-        speedMode: memberCaps.some((c) => c.speedMode),
-        contextWindow: memberCaps.reduce((min, c) => (c.contextWindow ? Math.min(min || Infinity, c.contextWindow) : min), null),
-        maxOutput: memberCaps.reduce((min, c) => (c.maxOutput ? Math.min(min || Infinity, c.maxOutput) : min), null),
-      };
+      if (members.length === 0) continue;
+      const aggregated = aggregateComboCapabilities(members, comboByName);
+      if (!aggregated) continue;
+      const comboCaps = { ...aggregated };
+      if (Number(combo.contextWindow) > 0) {
+        comboCaps.contextWindow = Number(combo.contextWindow);
+      }
+      // A combo's marks come from its members: the plugin selection was made per
+      // model when the combo was configured, so those are the marks that apply.
+      // The previous lookup wrote into an undefined `caps` and matched a stray
+      // `m` from the outer loop, so a combo never showed a plugin mark.
+      const comboMarks = new Set();
+      for (const member of members) {
+        for (const mark of applyPluginMarks(comboCaps, [member, String(member).split("/").pop()])) {
+          comboMarks.add(mark);
+        }
+      }
       models.push({
         provider: "combo",
         model: combo.name,
@@ -185,7 +259,8 @@ export async function GET() {
         fullModel: combo.name,
         routedModel: combo.name,
         alias: combo.name,
-        caps,
+        caps: comboCaps,
+        pluginMarks: [...comboMarks],
         isCombo: true,
       });
     }

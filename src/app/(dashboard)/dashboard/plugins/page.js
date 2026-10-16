@@ -11,62 +11,95 @@ import {
 } from "@/shared/components";
 import { useModelCaps } from "@/shared/hooks/useModelCaps";
 import { useNotificationStore } from "@/store/notificationStore";
+import PluginMark from "@/shared/components/PluginMark";
+import { CUSTOM_PLUGIN_KEYS } from "@/shared/constants/pluginKeys";
 
 const PLUGINS = [
   {
     key: "imageVision",
     title: "Image Vision",
-    icon: "visibility",
-    iconColor: "text-blue-500",
-    iconBg: "bg-blue-500/10 border-blue-500/20",
+    iconColor: "text-sky-400",
     description:
-      "Bikin model yang buta gambar jadi bisa 'melihat'. Gambar diubah jadi deskripsi teks — kepake buat CLI tools & agent yang kirim screenshot.",
+      "Enable image understanding for models that don't natively support vision. Images are converted to text descriptions, allowing any model to process visual content in CLI tools and agents.",
   },
   {
     key: "thinkDeeper",
     title: "Think Deeper",
-    icon: "psychology",
-    iconColor: "text-purple-500",
-    iconBg: "bg-purple-500/10 border-purple-500/20",
+    iconColor: "text-violet-400",
     description:
-      "Paksa model mikir step-by-step dalam tag <think> sebelum jawab. Buat soal susah: debugging, logika, arsitektur. Token lebih boros, jawaban lebih teliti.",
-  },
-  {
-    key: "unrestrictedMode",
-    title: "Uncensored Output",
-    icon: "key_off",
-    iconColor: "text-red-500",
-    iconBg: "bg-red-500/10 border-red-500/20",
-    description:
-      "Lewati penolakan standar AI. Model jawab langsung tanpa ceramah — buat analisa teknis mentah. Catatan: model ketat (Claude/GPT terbaru) bisa tetap nolak.",
+      "Enhance reasoning with multi-step chain-of-thought analysis. Forces the model to break problems into steps before answering, producing more thorough and accurate responses.",
   },
   {
     key: "speedMode",
     title: "Speed Mode",
-    icon: "bolt",
-    iconColor: "text-cyan-500",
-    iconBg: "bg-cyan-500/10 border-cyan-500/20",
+    iconColor: "text-cyan-300",
     description:
-      "Matikan reasoning, jawab langsung tanpa mikir. Buat yang gampang-gampang: translate, format ulang, jawab singkat. Latensi turun drastis.",
+      "Skip thinking for faster responses. Disables reasoning mode on the selected models and instructs them to answer directly, ideal for simple tasks where low latency matters more than deep analysis.",
   },
   {
-    key: "jsonMode",
-    title: "JSON Mode",
-    icon: "data_object",
-    iconColor: "text-emerald-500",
-    iconBg: "bg-emerald-500/10 border-emerald-500/20",
+    key: "jsonGuard",
+    title: "JSON Guard",
+    iconColor: "text-emerald-400",
     description:
-      "Paksa jawaban jadi 1 objek JSON valid — tanpa markdown, tanpa basa-basi. Buat coding agent & pipeline yang parse output model langsung.",
+      "Keep machine-readable output parseable. Strips prose and markdown fences around JSON, fixes Python-style literals and trailing commas, closes payloads the output limit cut off, and drops tool-call arguments the schema never declared.",
+  },
+  {
+    key: "contextSqueezer",
+    title: "Context Squeezer",
+    iconColor: "text-amber-300",
+    description:
+      "Fit long conversations into the model's context window. The oldest turns are replaced with a short recap and oversized tool output is trimmed, so the newest turns always arrive intact instead of the provider rejecting the request.",
+  },
+  {
+    key: "openaiToolBridge",
+    title: "OpenAI Tool Bridge",
+    iconColor: "text-fuchsia-400",
+    description:
+      "Keep tool calling working on models that cannot do it natively. Text-only providers (browser-session models with tools disabled) answer in prose; the bridge reads the tools you offered, picks the calls the model wrote out in its answer, and hands your client proper tool_calls with arguments filtered to the schema it declared.",
+  },
+  {
+    key: "antiSlop",
+    title: "Anti Slop",
+    iconColor: "text-teal-300",
+    levelled: true,
+    description:
+      "Injects the antislop rules (https://github.com/miqdadbadjuber/anti-slop) into the system prompt of the models you pick, so they stop shipping generic AI UI, copy and code. Three intensities: Lite catches the obvious patterns, Full adds the hard-gate rules and the craftsmanship standard, Ultra adds the mandatory PASS/FAIL delivery report.",
   },
 ];
 
-const DEFAULT_PLUGINS_STATE = {
-  imageVision: { enabled: false, models: [] },
-  thinkDeeper: { enabled: false, models: [] },
-  unrestrictedMode: { enabled: false, models: [] },
-  speedMode: { enabled: false, models: [] },
-  jsonMode: { enabled: false, models: [] },
-};
+// One shape for every plugin: enabled flag plus the model list it applies to.
+// `stored` is whatever settings held, so an unknown key in settings is ignored
+// and a plugin missing from settings comes back off rather than undefined.
+// Anti Slop ships three intensities, mirroring Ponytail's levels. The level is
+// stored on the plugin entry so it rides along in settings rather than living in
+// a second place that could disagree with the toggle.
+export const ANTISLOP_LEVELS = [
+  { id: "lite", label: "Lite", desc: "Purpose test plus a scan for the obvious AI patterns." },
+  { id: "full", label: "Full", desc: "Adds the Hard Gate rules, the craftsmanship standard and the swap test." },
+  { id: "ultra", label: "Ultra", desc: "Adds the mandatory four-block PASS/FAIL delivery report." },
+];
+
+const DEFAULT_ANTISLOP_LEVEL = "full";
+
+function normalizeAntislopLevel(level) {
+  return ANTISLOP_LEVELS.some((l) => l.id === level) ? level : DEFAULT_ANTISLOP_LEVEL;
+}
+
+function defaultPluginsFrom(stored) {
+  const out = {};
+  for (const key of CUSTOM_PLUGIN_KEYS) {
+    const entry = stored?.[key];
+    out[key] = {
+      enabled: Boolean(entry?.enabled),
+      models: Array.isArray(entry?.models) ? entry.models.filter(Boolean) : [],
+      // Only Anti Slop has a level; every other plugin keeps {enabled, models}.
+      ...(key === "antiSlop" ? { level: normalizeAntislopLevel(entry?.level) } : {}),
+    };
+  }
+  return out;
+}
+
+const DEFAULT_PLUGINS_STATE = defaultPluginsFrom(null);
 
 function formatModelName(modelVal) {
   if (!modelVal) return "";
@@ -93,38 +126,11 @@ export default function PluginsPage() {
         if (pluginsRes.ok) {
           const data = await pluginsRes.json();
           if (data.customPlugins) {
-            setCustomPlugins({
-              imageVision: {
-                enabled: Boolean(data.customPlugins.imageVision?.enabled),
-                models: Array.isArray(data.customPlugins.imageVision?.models)
-                  ? data.customPlugins.imageVision.models
-                  : [],
-              },
-              thinkDeeper: {
-                enabled: Boolean(data.customPlugins.thinkDeeper?.enabled),
-                models: Array.isArray(data.customPlugins.thinkDeeper?.models)
-                  ? data.customPlugins.thinkDeeper.models
-                  : [],
-              },
-              unrestrictedMode: {
-                enabled: Boolean(data.customPlugins.unrestrictedMode?.enabled),
-                models: Array.isArray(data.customPlugins.unrestrictedMode?.models)
-                  ? data.customPlugins.unrestrictedMode.models
-                  : [],
-              },
-              speedMode: {
-                enabled: Boolean(data.customPlugins.speedMode?.enabled),
-                models: Array.isArray(data.customPlugins.speedMode?.models)
-                  ? data.customPlugins.speedMode.models
-                  : [],
-              },
-              jsonMode: {
-                enabled: Boolean(data.customPlugins.jsonMode?.enabled),
-                models: Array.isArray(data.customPlugins.jsonMode?.models)
-                  ? data.customPlugins.jsonMode.models
-                  : [],
-              },
-            });
+            // Derived from CUSTOM_PLUGIN_KEYS rather than spelled out again:
+            // a hand-written literal had drifted to five keys while the plugin
+            // table has six, so openaiToolBridge always came back undefined and
+            // its toggle rendered OFF after every reload.
+            setCustomPlugins(defaultPluginsFrom(data.customPlugins));
           }
         }
 
@@ -156,6 +162,22 @@ export default function PluginsPage() {
       }
     },
     []
+  );
+
+  // Level lives on the plugin entry, so it saves through the same path as the
+  // toggle - no second settings key that could disagree with it.
+  const handleLevelChange = useCallback(
+    (pluginKey, level) => {
+      setCustomPlugins((prev) => {
+        const updated = {
+          ...prev,
+          [pluginKey]: { ...prev[pluginKey], level },
+        };
+        savePlugins(updated);
+        return updated;
+      });
+    },
+    [savePlugins]
   );
 
   const handleToggle = useCallback(
@@ -232,9 +254,9 @@ export default function PluginsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-text-main">Power-Ups</h1>
+        <h1 className="text-2xl font-bold text-text-main">Custom Plugins</h1>
         <p className="text-sm text-text-muted mt-1">
-          Suntik kemampuan ekstra ke model favoritmu — nyalain, pilih model, beres
+          Extend model capabilities with plugins
         </p>
       </div>
 
@@ -251,23 +273,25 @@ export default function PluginsPage() {
             <Card key={plugin.key} className="flex flex-col h-full">
               <div className="flex items-start justify-between gap-4 mb-3">
                 <div className="flex items-center gap-3">
+                  {/* Single plugin mark: one tile in the plugin's own colour.
+                      An earlier pass drew the same glyph twice (tile plus a
+                      docked mini badge); the duplicate read as a second logo,
+                      so the badge is gone. The tile gets a solid coloured ring
+                      when the plugin is enabled and a flat hairline when off. */}
+                  {/* One shared tile for all seven cards: neutral glass, thin hairline,
+                      and the plugin's own saturated colour carried by the glyph
+                      itself. Seven translucent colourwashes never read as a
+                      system; the glyph does the differentiating now. */}
                   <div
-                    className={`size-10 rounded-xl flex items-center justify-center border shrink-0 ${plugin.iconBg}`}
+                    className={`size-11 rounded-xl flex items-center justify-center border shrink-0 bg-surface text-text-main border-border-subtle ${isEnabled ? "ring-1 ring-primary/50 shadow-[var(--shadow-elev)]" : ""}`}
                   >
-                    <span
-                      className={`material-symbols-outlined text-[22px] leading-none ${plugin.iconColor}`}
-                    >
-                      {plugin.icon}
+                    <span className={`inline-flex items-center justify-center ${plugin.iconColor}`}>
+                      <PluginMark name={plugin.key} size={24} strokeWidth={2} />
                     </span>
                   </div>
                   <h3 className="font-semibold text-base text-text-main">
                     {plugin.title}
                   </h3>
-                  {isEnabled && selectedModels.length > 0 && (
-                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-green-500/10 text-green-600 dark:text-green-400 whitespace-nowrap">
-                      AKTIF • {selectedModels.length} model
-                    </span>
-                  )}
                 </div>
                 <Toggle
                   checked={isEnabled}
@@ -278,6 +302,34 @@ export default function PluginsPage() {
               <p className="text-sm text-text-muted leading-relaxed mb-5">
                 {plugin.description}
               </p>
+
+              {/* Intensity, shown only while the plugin is on - same shape as the
+                  Ponytail level picker on the Token Saver page. */}
+              {plugin.levelled && isEnabled && (
+                <div className="mb-4 space-y-1.5">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {ANTISLOP_LEVELS.map((lvl) => (
+                      <button
+                        key={lvl.id}
+                        type="button"
+                        onClick={() => handleLevelChange(plugin.key, lvl.id)}
+                        className={`px-3 py-1.5 rounded text-xs font-medium border transition-colors ${
+                          (customPlugins[plugin.key]?.level || "full") === lvl.id
+                            ? "bg-primary text-white border-primary"
+                            : "bg-transparent border-border text-text-muted hover:bg-surface-2"
+                        }`}
+                      >
+                        {lvl.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-text-muted">
+                    {ANTISLOP_LEVELS.find(
+                      (lvl) => lvl.id === (customPlugins[plugin.key]?.level || "full")
+                    )?.desc}
+                  </p>
+                </div>
+              )}
 
               {isEnabled && (
                 <div className="mt-auto pt-4 border-t border-border-subtle">

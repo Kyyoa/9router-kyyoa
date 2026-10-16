@@ -83,6 +83,35 @@ describe("OpenCode Free Session ID Format", () => {
     expect(translateSessionId(valid)).toBe(valid);
     expect(translateSessionId(`  ${valid}  `)).toBe(valid);
   });
+
+  it("does not collide on empty or missing session IDs", () => {
+    const first = translateSessionId("", "claude");
+    const second = translateSessionId("", "claude");
+    expect(first).toMatch(OPENCODE_SESSION_RE);
+    expect(second).toMatch(OPENCODE_SESSION_RE);
+    expect(first).not.toBe(second);
+  });
+
+  it("translates arbitrary session IDs stably and isolates tools", () => {
+    const idA1 = translateSessionId("conv-1", "claude");
+    const idA2 = translateSessionId("conv-1", "claude");
+    const idB = translateSessionId("conv-2", "claude");
+    const idTool = translateSessionId("conv-1", "codex");
+    expect(idA1).toBe(idA2);
+    expect(idA1).not.toBe(idB);
+    expect(idA1).not.toBe(idTool);
+
+    // Upstream Zen verifies the 12-hex prefix decodes to
+    // ~(BigInt(Date.now()) * 4096n + counter) - a synthesized SHA-256 prefix
+    // is rejected with 403 FreeTierError.
+    const timeHex = idA1.slice(4, 16);
+    const recovered = (0xffffffffffffn ^ BigInt(`0x${timeHex}`)) >> 12n;
+    const nowExpected = BigInt(Date.now()) & ((1n << 36n) - 1n);
+    expect(Math.abs(Number(recovered - nowExpected))).toBeLessThanOrEqual(2000);
+
+    // Stability across repeated translations of the same input.
+    expect(translateSessionId("conv-1", "claude")).toBe(idA1);
+  });
 });
 
 describe("OpenCode Free Executor Session Resolution", () => {
@@ -171,25 +200,25 @@ describe("OpenCode Free Executor Session Resolution", () => {
 });
 
 describe("OpenCode Free User-Agent Validation", () => {
-  it("defaults User-Agent to opencode/1.18.31 for non-opencode downstream clients", () => {
+  it("defaults User-Agent to opencode/latest/2.0.29/cli for non-opencode downstream clients", () => {
     const executor = getExecutor("opencode");
     const headersNoUa = executor.buildHeaders({});
-    expect(headersNoUa["User-Agent"]).toBe("opencode/1.18.31");
+    expect(headersNoUa["User-Agent"]).toBe("opencode/latest/2.0.29/cli");
 
     const headersClaude = executor.buildHeaders({ rawHeaders: { "user-agent": "Claude-Code/1.0" } });
-    expect(headersClaude["User-Agent"]).toBe("opencode/1.18.31");
+    expect(headersClaude["User-Agent"]).toBe("opencode/latest/2.0.29/cli");
   });
 
-  it("replaces bare opencode with versioned opencode/1.18.31 to prevent 403 FreeTierError", () => {
+  it("replaces bare opencode with versioned opencode/latest/2.0.29/cli to prevent 403 FreeTierError", () => {
     const executor = getExecutor("opencode");
     const headers = executor.buildHeaders({ rawHeaders: { "user-agent": "opencode" } });
-    expect(headers["User-Agent"]).toBe("opencode/1.18.31");
+    expect(headers["User-Agent"]).toBe("opencode/latest/2.0.29/cli");
   });
 
   it("upgrades outdated opencode versions (< 1.17) to prevent 426 Upgrade Required", () => {
     const executor = getExecutor("opencode");
     const headers = executor.buildHeaders({ rawHeaders: { "user-agent": "opencode/1.15.0" } });
-    expect(headers["User-Agent"]).toBe("opencode/1.18.31");
+    expect(headers["User-Agent"]).toBe("opencode/latest/2.0.29/cli");
   });
 
   it("preserves valid opencode versions (>= 1.17)", () => {
@@ -201,6 +230,23 @@ describe("OpenCode Free User-Agent Validation", () => {
 
     const headersFuture = executor.buildHeaders({ rawHeaders: { "user-agent": "opencode/1.19.0" } });
     expect(headersFuture["User-Agent"]).toBe("opencode/1.19.0");
+
+    const headersV2 = executor.buildHeaders({ rawHeaders: { "user-agent": "opencode/latest/2.0.29/cli" } });
+    expect(headersV2["User-Agent"]).toBe("opencode/latest/2.0.29/cli");
+  });
+
+  it("rejects browser strings with incidental digits from spoofing version check", () => {
+    const executor = getExecutor("opencode");
+    const headers = executor.buildHeaders({
+      rawHeaders: { "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) opencode/invalid" },
+    });
+    expect(headers["User-Agent"]).toBe("opencode/latest/2.0.29/cli");
+  });
+
+  it("attaches anthropic-version for union-alpha model even when url is omitted", () => {
+    const executor = getExecutor("opencode");
+    const headers = executor.buildHeaders({}, true, "", "union-alpha");
+    expect(headers["anthropic-version"]).toBeDefined();
   });
 });
 
@@ -277,54 +323,41 @@ describe("OpenCode Stable Session Reuse (429 follow-up)", () => {
     expect(second).toBe(first);
   });
 
-  it("applies the full lowercase free-tier fingerprint quartet", () => {
+  it("applies the canonical free-tier fingerprint tools (read and shell)", () => {
     const executor = getExecutor("opencode");
 
     const chatNoTools = executor.transformRequest("nemotron-3-ultra-free", {
       messages: [{ role: "user", content: "hi" }],
     });
     expect(chatNoTools.stream).toBe(true);
-    expect(chatNoTools.tool_choice).toBe("none");
+    expect(chatNoTools.tool_choice).toBeUndefined();
     expect(chatNoTools.tools.map((t) => t.function?.name)).toEqual([
-      "bash", "glob", "grep", "read",
+      "read", "shell",
     ]);
 
     const chatWithTools = executor.transformRequest("nemotron-3-ultra-free", {
       messages: [{ role: "user", content: "hi" }],
       tools: [
-        { type: "function", function: { name: "Bash", description: "Claude Code tool" } },
-        { type: "function", function: { name: "Glob", description: "Claude Code tool" } },
-        { type: "function", function: { name: "Grep", description: "Claude Code tool" } },
         { type: "function", function: { name: "Read", description: "Claude Code tool" } },
+        { type: "function", function: { name: "Shell", description: "Claude Code tool" } },
       ],
       tool_choice: "auto",
     });
     expect(chatWithTools.tool_choice).toBe("auto");
     expect(chatWithTools.tools.map((t) => t.function?.name)).toEqual([
-      "bash", "glob", "grep", "read",
+      "read", "shell",
     ]);
 
     const chatPartial = executor.transformRequest("nemotron-3-ultra-free", {
       messages: [{ role: "user", content: "hi" }],
       tools: [
-        { type: "function", function: { name: "bash", description: "existing" } },
         { type: "function", function: { name: "read", description: "existing" } },
       ],
     });
     expect(chatPartial.tools.map((t) => t.function?.name)).toEqual([
-      "bash", "read", "glob", "grep",
+      "read", "shell",
     ]);
     expect(chatPartial.tools[0].function.description).toBe("existing");
-
-    // Already has the whole quartet -> do not insert anything
-    const chatFull = executor.transformRequest("nemotron-3-ultra-free", {
-      messages: [{ role: "user", content: "hi" }],
-      tools: ["bash", "glob", "grep", "read"].map((name) => ({
-        type: "function", function: { name, description: "existing" },
-      })),
-    });
-    expect(chatFull.tools.length).toBe(4);
-    expect(chatFull.tools[0].function.description).toBe("existing");
   });
 
   it("cloaks Muse Responses requests even when the client already supplies tools", () => {
@@ -345,12 +378,10 @@ describe("OpenCode Stable Session Reuse (429 follow-up)", () => {
     expect(transformed.reasoning?.effort).toBe("xhigh");
     const names = transformed.tools.map((tool) => tool.name);
     expect(names).toContain("zcode_search");
-    expect(names).toContain("bash");
-    expect(names).toContain("glob");
-    expect(names).toContain("grep");
     expect(names).toContain("read");
-    expect(names.filter((name) => name === "bash")).toHaveLength(1);
+    expect(names).toContain("shell");
     expect(names.filter((name) => name === "read")).toHaveLength(1);
+    expect(names.filter((name) => name === "shell")).toHaveLength(1);
   });
 
   it("declares forceStream on the opencode transport so chatCore serves SSE upstream", async () => {

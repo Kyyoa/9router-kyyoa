@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import Modal from "./Modal";
 import Button from "./Button";
-import ChangelogModal from "./ChangelogModal";
 import { GITHUB_CONFIG } from "@/shared/constants/config";
 
 // Post-login welcome dialog.
@@ -31,7 +30,6 @@ import { GITHUB_CONFIG } from "@/shared/constants/config";
 // worse exit than the button that actually says what it does.
 export default function WelcomeModal() {
   const [isOpen, setIsOpen] = useState(false);
-  const [changelogOpen, setChangelogOpen] = useState(false);
   const [version, setVersion] = useState(null);
 
   useEffect(() => {
@@ -65,11 +63,7 @@ export default function WelcomeModal() {
     setIsOpen(false);
   };
 
-  // No early `return null` here: the changelog mounts as a sibling below, and an
-  // early return would unmount the whole fragment (changelog included) the moment
-  // "View changelog" closes the welcome dialog. <Modal> already renders nothing
-  // when isOpen is false, so passing it through is enough.
-  if (!isOpen && !changelogOpen) return null;
+  if (!isOpen) return null;
 
   const facts = [
     "One key and one base URL in front of every provider you connect.",
@@ -78,7 +72,6 @@ export default function WelcomeModal() {
   ];
 
   return (
-    <>
       <Modal
         isOpen={isOpen}
         onClose={handleClose}
@@ -133,24 +126,16 @@ export default function WelcomeModal() {
           <Button
             variant="primary"
             fullWidth
-            className="sm:w-auto"
+            className="sm:w-auto sm:flex-1 shadow-[0_8px_24px_-8px_var(--color-primary)]"
             onClick={handleClose}
           >
             Get started
-          </Button>
-          <Button
-            variant="outline"
-            fullWidth
-            className="sm:w-auto"
-            onClick={() => { setIsOpen(false); setChangelogOpen(true); }}
-          >
-            View changelog
           </Button>
           <a
             href={GITHUB_CONFIG.repoUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-medium text-text-main transition-colors hover:border-primary hover:text-primary sm:w-auto"
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-primary/40 bg-primary/5 px-3 py-2 text-sm font-semibold text-primary transition-all hover:border-primary hover:bg-primary/10 hover:shadow-[0_0_16px_-4px_var(--color-primary)] sm:w-auto"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
@@ -159,7 +144,5 @@ export default function WelcomeModal() {
           </a>
         </div>
       </Modal>
-      <ChangelogModal isOpen={changelogOpen} onClose={() => setChangelogOpen(false)} />
-    </>
   );
 }

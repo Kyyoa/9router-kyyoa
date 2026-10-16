@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import ChangelogModal from "./ChangelogModal";
 import BellMenu from "./BellMenu";
 import NotifToast, { mergeLiveTasks } from "./NotifToast";
 import { useSessionStore } from "@/store/sessionStore";
@@ -31,7 +30,6 @@ export default function NotificationBell() {
   const role = useSessionStore((state) => state.role);
   const isAdmin = role !== "apikey";
   const [open, setOpen] = useState(false);
-  const [changelogOpen, setChangelogOpen] = useState(false);
   const [items, setItems] = useState([]);
   const [unread, setUnread] = useState(0);
   const [jobs, setJobs] = useState([]);
@@ -283,7 +281,6 @@ export default function NotificationBell() {
         )}
       </BellMenu>
 
-      <ChangelogModal isOpen={changelogOpen} onClose={() => setChangelogOpen(false)} />
     </div>
   );
 }

@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef } from "react";
 import PropTypes from "prop-types";
-import ChangelogModal from "./ChangelogModal";
 import { ConfirmModal } from "./Modal";
 import ThemeModal from "./ThemeModal";
 import { useSessionStore } from "@/store/sessionStore";
@@ -43,7 +42,6 @@ export default function HeaderMenu({ onLogout }) {
   // it never sees the control (the route refuses it anyway).
   const canShutdown = role !== "apikey";
   const [isOpen, setIsOpen] = useState(false);
-  const [changelogOpen, setChangelogOpen] = useState(false);
   const [themeModalOpen, setThemeModalOpen] = useState(false);
   const [shutdownOpen, setShutdownOpen] = useState(false);
   const [isShuttingDown, setIsShuttingDown] = useState(false);
@@ -117,7 +115,6 @@ export default function HeaderMenu({ onLogout }) {
         )}
       </div>
 
-      <ChangelogModal isOpen={changelogOpen} onClose={() => setChangelogOpen(false)} />
       <ThemeModal isOpen={themeModalOpen} onClose={() => setThemeModalOpen(false)} />
       <ConfirmModal
         isOpen={shutdownOpen}

@@ -73,6 +73,7 @@ export default function ProviderDetailPage() {
   const [thinkingMode, setThinkingMode] = useState("auto");
   const [autoPing, setAutoPing] = useState({ enabled: false, connections: {} });
   const [suggestedModels, setSuggestedModels] = useState([]);
+  const [suggestedModelsError, setSuggestedModelsError] = useState(null);
   const [liveModels, setLiveModels] = useState([]);
   // Live-catalog fetch warning/error (surfaced for zed only; cursor behavior unchanged).
   const [liveModelsError, setLiveModelsError] = useState(null);
@@ -535,7 +536,10 @@ export default function ProviderDetailPage() {
   useEffect(() => {
     const fetcher = (OAUTH_PROVIDERS[providerId] || APIKEY_PROVIDERS[providerId] || FREE_PROVIDERS[providerId] || FREE_TIER_PROVIDERS[providerId])?.modelsFetcher;
     if (!fetcher) return;
-    fetchSuggestedModels(fetcher).then(setSuggestedModels);
+    fetchSuggestedModels(fetcher).then(({ data, error }) => {
+      setSuggestedModels(data);
+      setSuggestedModelsError(error);
+    });
   }, [providerId]);
 
   const handleSetAlias = async (modelId, alias, providerAliasOverride = providerAlias) => {
@@ -1292,8 +1296,9 @@ export default function ProviderDetailPage() {
           </button>
         )}
 
-        {/* Suggested models from provider API — show only models not yet added */}
-        {suggestedModels.length > 0 && (() => {
+        {/* Suggested models from provider API — show only models not yet added.
+            Kyyoa style: boxed card, free ids on top with FREE chip, the rest below. */}
+        {(suggestedModels.length > 0 || suggestedModelsError) && (() => {
           const addedFullModels = new Set([
             ...Object.values(modelAliases),
             ...customModelRows.map((model) => model.fullModel),
@@ -1302,25 +1307,52 @@ export default function ProviderDetailPage() {
           const notAdded = suggestedModels.filter(
             (m) => !addedFullModels.has(`${providerStorageAlias}/${m.id}`) && !hardcodedIds.has(m.id)
           );
-          if (notAdded.length === 0) return null;
+          // Tanpa flag = bayar, biar model bayar ga pernah kepasang badge FREE.
+          const freeSuggested = notAdded.filter((m) => m.isFree === true);
+          const paidSuggested = notAdded.filter((m) => m.isFree !== true);
+          if (notAdded.length === 0 && !suggestedModelsError) return null;
           return (
-            <div className="w-full mt-2">
-              <p className="text-xs text-text-muted mb-2">Suggested free models (≥200k context):</p>
+            <div className="w-full mt-2 rounded-xl border border-border-subtle bg-surface/50 p-3">
+              <p className="text-xs font-semibold text-text-main mb-1">Suggested free models ({freeSuggested.length})</p>
+              {suggestedModelsError && (
+                <p className="text-[11px] text-amber-600 dark:text-amber-400 mb-2">{suggestedModelsError}</p>
+              )}
               <div className="flex flex-wrap gap-2">
-                {notAdded.map((m) => (
+                {freeSuggested.map((m) => (
                   <button
                     key={m.id}
                     onClick={async () => {
                       await handleAddCustomModel(m.id, "llm", providerStorageAlias);
                     }}
-                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-black/10 dark:border-white/10 text-xs text-text-muted hover:text-primary hover:border-primary/40 hover:bg-primary/5 transition-colors"
-                    title={`${m.name} · ${(m.contextLength / 1000).toFixed(0)}k ctx`}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-green-500/40 bg-green-500/5 text-xs text-text-main hover:border-green-500 hover:bg-green-500/10 transition-colors"
+                    title={m.contextLength != null ? `${m.name} · ${(m.contextLength / 1000).toFixed(0)}k ctx` : m.name}
                   >
-                    <span className="material-symbols-outlined text-[13px]">add</span>
+                    <span className="material-symbols-outlined text-[13px] text-green-600 dark:text-green-400">add</span>
                     {m.id.split("/").pop()}
+                    <span className="text-[10px] font-bold text-green-700 dark:text-green-300 bg-green-500/15 border border-green-500/30 px-1.5 py-px rounded-md">FREE</span>
                   </button>
                 ))}
               </div>
+              {paidSuggested.length > 0 && (
+                <>
+                  <p className="text-xs font-semibold text-text-muted mt-3 mb-1">Other models ({paidSuggested.length})</p>
+                  <div className="flex flex-wrap gap-2">
+                    {paidSuggested.map((m) => (
+                      <button
+                        key={m.id}
+                        onClick={async () => {
+                          await handleAddCustomModel(m.id, "llm", providerStorageAlias);
+                        }}
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-black/10 dark:border-white/10 text-xs text-text-muted hover:text-primary hover:border-primary/40 hover:bg-primary/5 transition-colors"
+                        title={m.contextLength != null ? `${m.name} · ${(m.contextLength / 1000).toFixed(0)}k ctx` : m.name}
+                      >
+                        <span className="material-symbols-outlined text-[13px]">add</span>
+                        {m.id.split("/").pop()}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           );
         })()}

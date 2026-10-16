@@ -1,7 +1,8 @@
 import opencodeRegistry from "open-sse/providers/registry/opencode.js";
 
-// Free OpenCode models that don't use the "-free" id suffix
-const KNOWN_FREE_OPENCODE_MODELS = ["big-pickle"];
+// Free OpenCode models that don't use the "-free" id suffix. big-pickle answers
+// 200 on the free tier; union-alpha is a curated free id in the registry.
+const KNOWN_FREE_OPENCODE_MODELS = ["big-pickle", "union-alpha"];
 
 // Upstream returns "Model is unavailable" for this id (2026-09-02) — re-enable when fixed
 const DEAD_FREE_OPENCODE_MODELS = new Set(["deepseek-v4-flash-free"]);
@@ -14,7 +15,9 @@ function opencodeModelId(m) {
 
 // A free OpenCode model carries a free suffix (any reasonable separator) or is
 // explicitly known; dead ids are always dropped.
-function isFreeOpencodeModel(m) {
+// Exported: the panel groups its chips with the same rule the filter used, so
+// a model cannot be shown under one heading and counted under the other.
+export function isFreeOpencodeModel(m) {
   const id = opencodeModelId(m);
   if (!id || DEAD_FREE_OPENCODE_MODELS.has(id)) return false;
   const lower = id.toLowerCase();
@@ -32,8 +35,18 @@ function isFreeOpencodeModel(m) {
 export const FALLBACK_SUGGESTIONS = {
   "opencode-free": (opencodeRegistry.models || [])
     .filter((m) => typeof m?.id === "string" && m.id)
-    .map((m) => ({ id: m.id, name: m.name || m.id })),
+    .map((m) => ({ id: m.id, name: m.name || m.id, isFree: isFreeOpencodeModel(m) }))
+    .sort((a, b) => Number(b.isFree) - Number(a.isFree) || a.id.localeCompare(b.id)),
 };
+
+/**
+ * The free subset of a catalogue produced by FILTERS. Paid ids on a free-tier
+ * provider answer 401 without a key, so advertising them as free only produces
+ * failures.
+ * @param {Array<{ isFree?: boolean }>} list
+ * @returns {Array<{ isFree?: boolean }>}
+ */
+export const onlyFree = (list) => (Array.isArray(list) ? list.filter((m) => m?.isFree === true) : []);
 
 export const FILTERS = {
   "openrouter-free": (models) =>
@@ -49,8 +62,10 @@ export const FILTERS = {
 
   "opencode-free": (models) =>
     (Array.isArray(models) ? models : [])
-      .filter(isFreeOpencodeModel)
-      .map((m) => ({ id: opencodeModelId(m), name: opencodeModelId(m) })),
+      .map((m) => ({ id: opencodeModelId(m), name: opencodeModelId(m) }))
+      .filter((m) => m.id)
+      .map((m) => ({ ...m, isFree: isFreeOpencodeModel(m) }))
+      .sort((a, b) => Number(b.isFree) - Number(a.isFree) || a.id.localeCompare(b.id)),
 
   // Generic OpenAI-compatible catalogue ({ data: [{ id, ... }] }) - accept any
   // string id so unknown-type fetchers fail open instead of 400ing.

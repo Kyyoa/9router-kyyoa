@@ -240,15 +240,14 @@ export default function NotificationBell() {
         ) : (
           visible.map((n) => {
             const style = SEVERITY_STYLE[n.severity] || SEVERITY_STYLE.info;
-            // Every entry opens the changelog: the bell says something
-            // changed, and the changelog says what.
             return (
               <button
                 key={n.id}
                 type="button"
                 onClick={() => {
                   setOpen(false);
-                  setChangelogOpen(true);
+                  setItems((prev) => prev.map((x) => (x.id === n.id ? { ...x, read: true } : x)));
+                  setUnread((u) => Math.max(0, u - 1));
                 }}
                 className="block w-full text-left border-b border-border-subtle/60 last:border-0"
               >

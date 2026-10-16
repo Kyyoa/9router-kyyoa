@@ -7,8 +7,8 @@ import Image from "next/image";
 import { getProviderIconSrc, markProviderIconMissing } from "@/shared/utils/providerIcon";
 import { getCustomLogo } from "@/shared/utils/providerLogo";
 import { buildStudioTargetIndex } from "@/shared/utils/studioModelVisibility";
-import { Card, Button, Badge, Input, Modal, CardSkeleton, OAuthModal, KiroOAuthWrapper, CursorAuthModal, ZedAuthModal, XiaomiMimoAuthModal, IFlowCookieModal, GitLabAuthModal, Toggle, Select, EditConnectionModal, NoAuthProxyCard, ConfirmModal } from "@/shared/components";
-import { OAUTH_PROVIDERS, APIKEY_PROVIDERS, FREE_PROVIDERS, FREE_TIER_PROVIDERS, WEB_COOKIE_PROVIDERS, getProviderAlias, resolveProviderId, isOpenAICompatibleProvider, isAnthropicCompatibleProvider, AI_PROVIDERS } from "@/shared/constants/providers";
+import { Card, Button, Badge, Input, Modal, CardSkeleton, OAuthModal, KiroOAuthWrapper, CursorAuthModal, XiaomiMimoAuthModal, IFlowCookieModal, GitLabAuthModal, Toggle, Select, EditConnectionModal, NoAuthProxyCard, ConfirmModal } from "@/shared/components";
+import { OAUTH_PROVIDERS, APIKEY_PROVIDERS, FREE_PROVIDERS, FREE_TIER_PROVIDERS, WEB_COOKIE_PROVIDERS, getProviderAlias, isOpenAICompatibleProvider, isAnthropicCompatibleProvider, AI_PROVIDERS } from "@/shared/constants/providers";
 import { getModelsByProviderId, getModelKind } from "@/shared/constants/models";
 import { getThinkingLevels } from "open-sse/providers/thinkingLevels.js";
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
@@ -25,9 +25,6 @@ import EditCompatibleNodeModal from "./EditCompatibleNodeModal";
 import AddCustomModelModal from "./AddCustomModelModal";
 import BulkImportCodexModal from "./BulkImportCodexModal";
 import BulkImportGrokCliModal from "./BulkImportGrokCliModal";
-import CustomConfigCard from "./CustomConfigCard";
-import AutoPingScheduleModal from "./AutoPingScheduleModal";
-import { getScheduleSlotLabels } from "@/shared/services/quotaPingSchedule";
 
 const ONE_BY_ONE_DELAY_MS = 1000;
 
@@ -74,10 +71,8 @@ export default function ProviderDetailPage() {
   const [providerStrategy, setProviderStrategy] = useState(null);
   const [providerStickyLimit, setProviderStickyLimit] = useState("");
   const [thinkingMode, setThinkingMode] = useState("auto");
-  const [autoPing, setAutoPing] = useState({ enabled: false, connections: {}, schedules: {} });
-  const [scheduleConnection, setScheduleConnection] = useState(null);
+  const [autoPing, setAutoPing] = useState({ enabled: false, connections: {} });
   const [suggestedModels, setSuggestedModels] = useState([]);
-  const [suggestedModelsError, setSuggestedModelsError] = useState(null);
   const [liveModels, setLiveModels] = useState([]);
   // Live-catalog fetch warning/error (surfaced for zed only; cursor behavior unchanged).
   const [liveModelsError, setLiveModelsError] = useState(null);
@@ -193,7 +188,7 @@ export default function ProviderDetailPage() {
   const providerStorageAlias = isCompatible ? providerId : providerAlias;
   // Studio names replace the model they point at: those models leave the list below.
   const studioTargetIndex = buildStudioTargetIndex(studioModels);
-  // Union of levels across this provider's reasoning models - drives the level picker options.
+  // Union of levels across this provider's reasoning models — drives the level picker options.
   // Include custom models too (e.g. manually added gpt-5.6-sol → max).
   const providerThinkingLevels = (() => {
     const set = new Set();
@@ -351,7 +346,7 @@ export default function ProviderDetailPage() {
       setThinkingMode(thinkingCfg.mode || "auto");
       const autoPingSettingsKey = AUTO_PING_SETTINGS_KEYS[providerId];
       const apCfg = autoPingSettingsKey ? settingsData[autoPingSettingsKey] || {} : {};
-      setAutoPing({ enabled: apCfg.enabled === true, connections: apCfg.connections || {}, schedules: apCfg.schedules || {} });
+      setAutoPing({ enabled: apCfg.enabled === true, connections: apCfg.connections || {} });
       if (nodesRes.ok) {
         let node = (nodesData.nodes || []).find((entry) => entry.id === providerId) || null;
 
@@ -480,12 +475,8 @@ export default function ProviderDetailPage() {
     }
   };
 
-  const handleSaveAutoPing = (connectionId, { reactive, schedule }) => {
-    saveAutoPing({
-      ...autoPing,
-      connections: { ...autoPing.connections, [connectionId]: reactive },
-      schedules: { ...autoPing.schedules, [connectionId]: schedule },
-    });
+  const handleAutoPingConnection = (connectionId, on) => {
+    saveAutoPing({ ...autoPing, connections: { ...autoPing.connections, [connectionId]: on } });
   };
 
   useEffect(() => {
@@ -498,7 +489,7 @@ export default function ProviderDetailPage() {
 
   // Live per-connection catalogs (cursor, zed): the static registry carries
   // no usable list, so resolve from the active connection. Fires only when
-  // the provider id or connection list changes - no polling, no loop.
+  // the provider id or connection list changes — no polling, no loop.
   // Cursor path is statement-identical to before; zed adds error surfacing.
   useEffect(() => {
     const isLiveCatalog = providerId === "cursor" || providerId === "zed";
@@ -540,24 +531,11 @@ export default function ProviderDetailPage() {
     return () => { cancelled = true; };
   }, [providerId, connections]);
 
-  // Fetch suggested models from provider's public API (if configured).
-  // Resolve aliases (e.g. "oc") to the registry id so the lookup hits even
-  // when the URL carries an alias instead of the registry key.
+  // Fetch suggested models from provider's public API (if configured)
   useEffect(() => {
-    const resolvedId = resolveProviderId(providerId);
-    const fetcher = (OAUTH_PROVIDERS[resolvedId] || APIKEY_PROVIDERS[resolvedId] || FREE_PROVIDERS[resolvedId] || FREE_TIER_PROVIDERS[resolvedId] || WEB_COOKIE_PROVIDERS[resolvedId])?.modelsFetcher;
-    if (!fetcher) {
-      setSuggestedModels([]);
-      setSuggestedModelsError(null);
-      return;
-    }
-    let cancelled = false;
-    fetchSuggestedModels(fetcher).then(({ data, error }) => {
-      if (cancelled) return;
-      setSuggestedModels(data);
-      setSuggestedModelsError(error);
-    });
-    return () => { cancelled = true; };
+    const fetcher = (OAUTH_PROVIDERS[providerId] || APIKEY_PROVIDERS[providerId] || FREE_PROVIDERS[providerId] || FREE_TIER_PROVIDERS[providerId])?.modelsFetcher;
+    if (!fetcher) return;
+    fetchSuggestedModels(fetcher).then(setSuggestedModels);
   }, [providerId]);
 
   const handleSetAlias = async (modelId, alias, providerAliasOverride = providerAlias) => {
@@ -592,14 +570,12 @@ export default function ProviderDetailPage() {
     }
   };
 
-  // `transport` pins a realtime STT dispatch marker (shared whitelist
-  // STT_TRANSPORT_META); the API only honours it on type "stt" records.
-  const handleAddCustomModel = async (modelId, type = "llm", providerAliasOverride = providerStorageAlias, caps, transport, ownedBy = "") => {
+  const handleAddCustomModel = async (modelId, type = "llm", providerAliasOverride = providerStorageAlias, caps) => {
     try {
       const res = await fetch("/api/models/custom", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ providerAlias: providerAliasOverride, id: modelId, type, ...(caps ? { caps } : {}), ...(transport ? { transport } : {}), ...(ownedBy ? { ownedBy } : {}) }),
+        body: JSON.stringify({ providerAlias: providerAliasOverride, id: modelId, type, ...(caps ? { caps } : {}) }),
       });
       if (res.ok) {
         await fetchCustomModels();
@@ -1067,7 +1043,7 @@ export default function ProviderDetailPage() {
                 type="checkbox"
                 checked={isSelected(conn.id)}
                 onChange={() => toggleSelectConnection(conn.id)}
-                className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
               />
             </div>
             <div className="flex-1 min-w-0">
@@ -1081,12 +1057,9 @@ export default function ProviderDetailPage() {
                 onMoveDown={() => handleSwapPriority(index, index + 1)}
                 onToggleActive={(isActive) => handleUpdateConnectionStatus(conn.id, isActive)}
                 autoPing={AUTO_PING_SETTINGS_KEYS[providerId] && conn.authType === "oauth" ? {
-                  isActive: autoPing.connections[conn.id] === true || autoPing.schedules?.[conn.id]?.enabled === true,
-                  reactiveOn: autoPing.connections[conn.id] === true,
+                  on: autoPing.connections[conn.id] === true,
+                  onToggle: (on) => handleAutoPingConnection(conn.id, on),
                   provider: providerId,
-                  scheduleOn: autoPing.schedules?.[conn.id]?.enabled === true,
-                  scheduleSummary: getScheduleSlotLabels(autoPing.schedules?.[conn.id]).join(" / "),
-                  onConfigure: () => setScheduleConnection(conn),
                 } : null}
                 onUpdateProxy={async (proxyPoolId) => {
                   try {
@@ -1210,7 +1183,7 @@ export default function ProviderDetailPage() {
       );
     }
     // Combine hardcoded models with Kilo free models (deduplicated)
-    // Exclude non-llm models (embedding, tts, etc.) - they have dedicated pages under media-providers
+    // Exclude non-llm models (embedding, tts, etc.) — they have dedicated pages under media-providers
     const allModels = [
       ...models,
       ...kiloFreeModels.filter((fm) => !models.some((m) => m.id === fm.id)),
@@ -1282,7 +1255,7 @@ export default function ProviderDetailPage() {
           );
         })}
 
-        {/* Add model button - inline, same style as model chips */}
+        {/* Add model button — inline, same style as model chips */}
         <button
           onClick={() => setShowAddCustomModel(true)}
           className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-primary/40 px-3 py-2 text-xs text-primary transition-colors hover:border-primary hover:bg-primary/5 sm:w-auto"
@@ -1291,7 +1264,7 @@ export default function ProviderDetailPage() {
           Add Model
         </button>
 
-        {/* Import Qoder models button - only show for qoder/qoder-cn provider */}
+        {/* Import Qoder models button — only show for qoder/qoder-cn provider */}
         {(providerId === "qoder" || providerId === "qoder-cn") && connections.some((conn) => conn.isActive !== false) && (
           <button
             onClick={handleImportQoderModels}
@@ -1305,7 +1278,7 @@ export default function ProviderDetailPage() {
           </button>
         )}
 
-        {/* Import Cline /models catalog button - only show for cline and clinepass providers */}
+        {/* Import Cline /models catalog button — only show for cline and clinepass providers */}
         {(providerId === "cline" || providerId === "clinepass") && connections.some((conn) => conn.isActive !== false) && (
           <button
             onClick={handleImportClineModels}
@@ -1319,10 +1292,8 @@ export default function ProviderDetailPage() {
           </button>
         )}
 
-        {/* Suggested models from provider API - show only models not yet added.
-            Rendered on data OR error so a failed refresh explains itself
-            instead of vanishing. */}
-        {(suggestedModels.length > 0 || suggestedModelsError) && (() => {
+        {/* Suggested models from provider API — show only models not yet added */}
+        {suggestedModels.length > 0 && (() => {
           const addedFullModels = new Set([
             ...Object.values(modelAliases),
             ...customModelRows.map((model) => model.fullModel),
@@ -1331,62 +1302,30 @@ export default function ProviderDetailPage() {
           const notAdded = suggestedModels.filter(
             (m) => !addedFullModels.has(`${providerStorageAlias}/${m.id}`) && !hardcodedIds.has(m.id)
           );
-          // Free ids first with their badge, paid ids below under their own
-          // heading. A row without the flag (older data) counts as paid so a
-          // paid model can never wear the free badge by accident.
-          const freeSuggested = notAdded.filter((m) => m.isFree === true);
-          const paidSuggested = notAdded.filter((m) => m.isFree !== true);
-          // Keep the block alive when a refresh failed: an empty chip list with
-          // no explanation reads as "there are no free models", which is not
-          // what happened - the note under the heading carries the reason.
-          if (notAdded.length === 0 && !suggestedModelsError) return null;
+          if (notAdded.length === 0) return null;
           return (
             <div className="w-full mt-2">
-              <p className="text-xs text-text-muted mb-2">Suggested free models ({freeSuggested.length}):</p>
-              {suggestedModelsError && (
-                <p className="text-[11px] text-amber-600 dark:text-amber-400 mb-2">{suggestedModelsError}</p>
-              )}
+              <p className="text-xs text-text-muted mb-2">Suggested free models (≥200k context):</p>
               <div className="flex flex-wrap gap-2">
-                {freeSuggested.map((m) => (
+                {notAdded.map((m) => (
                   <button
                     key={m.id}
                     onClick={async () => {
                       await handleAddCustomModel(m.id, "llm", providerStorageAlias);
                     }}
-                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-green-500/30 dark:border-green-500/25 text-xs text-text-muted hover:text-primary hover:border-primary/40 hover:bg-primary/5 transition-colors"
-                    title={m.contextLength != null ? `${m.name} · ${(m.contextLength / 1000).toFixed(0)}k ctx` : m.name}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-black/10 dark:border-white/10 text-xs text-text-muted hover:text-primary hover:border-primary/40 hover:bg-primary/5 transition-colors"
+                    title={`${m.name} · ${(m.contextLength / 1000).toFixed(0)}k ctx`}
                   >
                     <span className="material-symbols-outlined text-[13px]">add</span>
                     {m.id.split("/").pop()}
-                    <span className="text-[10px] font-bold text-green-600 dark:text-green-400 bg-green-500/10 px-1.5 py-0.5 rounded">FREE</span>
                   </button>
                 ))}
               </div>
-              {paidSuggested.length > 0 && (
-                <>
-                  <p className="text-xs text-text-muted mt-3 mb-2">Other models ({paidSuggested.length}):</p>
-                  <div className="flex flex-wrap gap-2">
-                    {paidSuggested.map((m) => (
-                      <button
-                        key={m.id}
-                        onClick={async () => {
-                          await handleAddCustomModel(m.id, "llm", providerStorageAlias);
-                        }}
-                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-black/10 dark:border-white/10 text-xs text-text-muted hover:text-primary hover:border-primary/40 hover:bg-primary/5 transition-colors"
-                        title={m.contextLength != null ? `${m.name} · ${(m.contextLength / 1000).toFixed(0)}k ctx` : m.name}
-                      >
-                        <span className="material-symbols-outlined text-[13px]">add</span>
-                        {m.id.split("/").pop()}
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
             </div>
           );
         })()}
 
-        {/* Disabled models - restorable */}
+        {/* Disabled models — restorable */}
         {disabledDisplayModels.length > 0 && (
           <div className="w-full mt-2">
             <p className="text-xs text-text-muted mb-2">Disabled models ({disabledDisplayModels.length}):</p>
@@ -1742,7 +1681,7 @@ export default function ProviderDetailPage() {
                       type="checkbox"
                       checked={allSelected}
                       onChange={toggleSelectAllConnections}
-                      className="h-3.5 w-3.5 rounded border-border text-primary focus:ring-primary"
+                      className="h-3.5 w-3.5 rounded border-gray-300 text-primary focus:ring-primary"
                     />
                     Select All
                   </label>
@@ -1823,9 +1762,6 @@ export default function ProviderDetailPage() {
           )}
         </Card>
       )}
-
-      {/* Per-provider user overrides (custom headers / connect timeout) */}
-      <CustomConfigCard providerId={providerId} />
 
       {/* Models */}
       <Card>
@@ -1920,13 +1856,6 @@ export default function ProviderDetailPage() {
           onSuccess={handleOAuthSuccess}
           onClose={() => setShowOAuthModal(false)}
         />
-      ) : providerId === "zed" ? (
-        <ZedAuthModal
-          isOpen={showOAuthModal}
-          providerInfo={providerInfo}
-          onSuccess={handleOAuthSuccess}
-          onClose={() => setShowOAuthModal(false)}
-        />
       ) : providerId === "gitlab" ? (
         <GitLabAuthModal
           isOpen={showOAuthModal}
@@ -1997,10 +1926,8 @@ export default function ProviderDetailPage() {
           isOpen={showAddCustomModel}
           providerAlias={providerStorageAlias}
           providerDisplayAlias={providerDisplayAlias}
-          onSave={async (modelId, caps, transport, ownedBy) => {
-            // caps.stt is a UI-only flag; the API accepts transports only on
-            // type "stt" records, so the save derives the type from it.
-            await handleAddCustomModel(modelId, caps?.stt ? "stt" : "llm", providerStorageAlias, caps, transport, ownedBy);
+          onSave={async (modelId, caps) => {
+            await handleAddCustomModel(modelId, "llm", providerStorageAlias, caps);
             setShowAddCustomModel(false);
           }}
           onClose={() => setShowAddCustomModel(false)}
@@ -2020,17 +1947,6 @@ export default function ProviderDetailPage() {
           isOpen={showBulkImportGrokCli}
           onClose={() => setShowBulkImportGrokCli(false)}
           onSuccess={fetchConnections}
-        />
-      )}
-
-      {scheduleConnection && (
-        <AutoPingScheduleModal
-          isOpen={!!scheduleConnection}
-          onClose={() => setScheduleConnection(null)}
-          connection={scheduleConnection}
-          reactive={autoPing.connections[scheduleConnection.id] === true}
-          schedule={autoPing.schedules?.[scheduleConnection.id] || null}
-          onSave={(result) => handleSaveAutoPing(scheduleConnection.id, result)}
         />
       )}
 

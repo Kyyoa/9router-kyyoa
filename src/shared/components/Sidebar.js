@@ -5,10 +5,11 @@ import PropTypes from "prop-types";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/shared/utils/cn";
-import { APP_CONFIG } from "@/shared/constants/config";
+import { APP_CONFIG, UPDATER_CONFIG } from "@/shared/constants/config";
 import { MEDIA_PROVIDER_KINDS } from "@/shared/constants/providers";
-import useSettingsStore from "@/store/settingsStore";
-import { useSessionStore } from "@/store/sessionStore";
+import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
+import Button from "./Button";
+import { ConfirmModal } from "./Modal";
 
 // const VISIBLE_MEDIA_KINDS = ["embedding", "image", "imageToText", "tts", "stt", "webSearch", "webFetch", "video", "music"];
 const VISIBLE_MEDIA_KINDS = ["embedding", "image", "video", "tts", "stt", "systemone"];
@@ -21,31 +22,32 @@ const navItems = [
   // { href: "/dashboard/basic-chat", label: "Basic Chat", icon: "chat" }, // Hidden
   { href: "/dashboard/combos", label: "Combo & Vision Adapter", icon: "layers" },
   { href: "/dashboard/usage", label: "Usage", icon: "bar_chart" },
+  { href: "/dashboard/api-key-usage", label: "API Usage", icon: "vpn_key" },
   { href: "/dashboard/quota", label: "Quota Tracker", icon: "data_usage" },
   { href: "/dashboard/token-saver", label: "Token Saver", icon: "savings" },
   // { href: "/dashboard/pxpipe", label: "PXPIPE", icon: "image" },
   { href: "/dashboard/cli-tools", label: "CLI Tools", icon: "terminal" },
 ];
 
-// Custom features added by this fork - open-ended, new tools land here too.
+// Custom features added by this fork — open-ended, new tools land here too.
 const workshopItems = [
-  { href: "/dashboard/arena", label: "Compare Models", icon: "swords" },
+  { href: "/dashboard/arena", label: "Battle Model", icon: "swords" },
   { href: "/dashboard/model-editor", label: "Custom Models", icon: "auto_awesome" },
-  { href: "/dashboard/plugins", label: "Custom Plugins", icon: "widgets" },
+  { href: "/dashboard/prd", label: "PRD Writer", icon: "description" },
+  { href: "/dashboard/plugins", label: "Power-Ups", icon: "widgets" },
 ];
 
-// Security Log and Inbox Error live in the bell, not the menu - they are
-// conditions to review, not places you visit to work.
 const debugItems = [
   { href: "/dashboard/console-log", label: "Console Log", icon: "monitor" },
   { href: "/dashboard/translator", label: "Translator", icon: "translate" },
+  { href: "/dashboard/upstream-watch", label: "Upstream Watch", icon: "radar" },
 ];
 
 const systemItems = [
   { href: "/dashboard/proxy-pools", label: "Proxy Pools", icon: "lan" },
 ];
 
-function NavLink({ href, icon, label, active, onClick, sub = false }) {
+function NavLink({ href, icon, label, active, onClick, sub = false, dot = false }) {
   return (
     <Link
       href={href}
@@ -71,6 +73,9 @@ function NavLink({ href, icon, label, active, onClick, sub = false }) {
         {icon}
       </span>
       <span className="text-[13px] font-medium leading-none min-w-0 truncate" title={label}>{label}</span>
+      {dot && (
+        <span className="ml-auto h-2 w-2 rounded-full bg-primary shrink-0" title="New upstream commits" />
+      )}
     </Link>
   );
 }
@@ -78,31 +83,26 @@ function NavLink({ href, icon, label, active, onClick, sub = false }) {
 export default function Sidebar({ onClose }) {
   const pathname = usePathname();
   const [mediaOpen, setMediaOpen] = useState(false);
+  const [isDisconnected, setIsDisconnected] = useState(false);
+  const [updateInfo, setUpdateInfo] = useState(null);
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [shutdownCountdown, setShutdownCountdown] = useState(0);
   const [enableTranslator, setEnableTranslator] = useState(false);
-  // One cached session for the whole shell; the theme store and HeaderMenu read
-  // the same role instead of each fetching /api/auth/status again.
-  // Two scalar selectors: an object-returning selector would hand React a new
-  // identity on every store change and re-render the sidebar in a loop.
-  const sessionRole = useSessionStore((state) => state.role);
-  const sessionPermissions = useSessionStore((state) => state.permissions);
-  const setSession = useSessionStore((state) => state.setSession);
-  const authStatus = { role: sessionRole, permissions: sessionPermissions };
+  const [maintainerMode, setMaintainerMode] = useState(false);
+  const [upstreamDot, setUpstreamDot] = useState(false);
+  const [authStatus, setAuthStatus] = useState(null);
+  const { copied, copy } = useCopyToClipboard(2000);
 
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/auth/status")
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (!cancelled && data) setSession(data);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [setSession]);
+  const INSTALL_CMD = updateInfo?.installCmd || UPDATER_CONFIG.installCmdLatest;
 
-  const isApiKeyUser = authStatus.role === "apikey";
-  const permissions = authStatus.permissions || { manageApiKeys: true, manageModels: true, manageProviders: true, manageTools: true, manageAdvanced: true, managePlugins: true, manageMediaProviders: true, viewUsage: true };
+  const isApiKeyUser = authStatus?.role === "apikey";
+  const permissions = authStatus?.permissions || {
+    manageApiKeys: true,
+    manageModels: true,
+    manageProviders: true,
+    viewUsage: true,
+  };
 
   const filteredNavItems = navItems.filter((item) => {
     if (!isApiKeyUser) return true;
@@ -112,39 +112,61 @@ export default function Sidebar({ onClose }) {
     if (item.href === "/dashboard/usage") return permissions.viewUsage;
     if (item.href === "/dashboard/api-key-usage") return permissions.viewUsage || permissions.manageApiKeys;
     if (item.href === "/dashboard/quota") return permissions.manageProviders;
-    if (item.href === "/dashboard/token-saver" || item.href === "/dashboard/cli-tools") return permissions.manageTools;
+    if (item.href === "/dashboard/cli-tools") return permissions.manageProviders;
+    if (item.href === "/dashboard/token-saver") return permissions.manageModels;
     return false;
   });
 
   const filteredWorkshopItems = workshopItems.filter((item) => {
     if (!isApiKeyUser) return true;
-    if (item.href === "/dashboard/model-editor" || item.href === "/dashboard/arena") {
-      return permissions.manageModels;
-    }
-    if (item.href === "/dashboard/plugins") return permissions.managePlugins;
-    return false;
+    // Battle Model + Custom Models + Preset Prompts + Power-Ups: all model tools.
+    return permissions.manageModels;
   });
 
-  const filteredDebugItems = debugItems.filter((item) => {
-    if (!isApiKeyUser) return true;
-    return permissions.manageAdvanced;
-  });
+  useEffect(() => {
+    fetch("/api/auth/status")
+      .then(res => res.json())
+      .then(data => setAuthStatus(data))
+      .catch(() => {});
+  }, []);
 
-  const filteredSystemItems = systemItems.filter((item) => {
-    if (!isApiKeyUser) return true;
-    return permissions.manageAdvanced;
-  });
+  useEffect(() => {
+    fetch("/api/settings")
+      .then(res => res.json())
+      .then(data => {
+        if (data.enableTranslator) setEnableTranslator(true);
+        if (data.maintainerMode) setMaintainerMode(true);
+      })
+      .catch(() => {});
+  }, []);
 
-  const canOpenMedia = !isApiKeyUser || permissions.manageMediaProviders;
-
-  // Settings are an administrator surface, so a key-signed session skips them
-  // instead of firing requests it may not read.
+  // Update check is an admin surface — key sessions skip it.
   useEffect(() => {
     if (isApiKeyUser) return;
-    useSettingsStore.getState().fetchSettings().then((data) => {
-      if (data?.enableTranslator) setEnableTranslator(true);
-    });
+    fetch("/api/version")
+      .then(res => res.json())
+      .then(data => { if (data.hasUpdate) setUpdateInfo(data); })
+      .catch(() => {});
   }, [isApiKeyUser]);
+
+  // Upstream dot: compare watched heads vs last-seen SHAs in localStorage.
+  // Seen marks are written by the Upstream Watch page itself on every visit.
+  // Key sessions skip it (page is admin-only anyway).
+  useEffect(() => {
+    if (isApiKeyUser) return;
+    fetch("/api/upstream-watch")
+      .then(res => res.json())
+      .then(data => {
+        try {
+          const unseen = (data?.remotes || []).some((r) => {
+            if (!r?.headSha) return false;
+            return localStorage.getItem(`9router:upstreamSeen:${r.id}`) !== r.headSha;
+          });
+          setUpstreamDot(unseen);
+        } catch { /* storage blocked */ }
+      })
+      .catch(() => {});
+  }, []);
 
   const isActive = (href) => {
     if (href === "/dashboard/endpoint") {
@@ -152,6 +174,38 @@ export default function Sidebar({ onClose }) {
     }
     return pathname.startsWith(href);
   };
+
+  // Open manual update panel (no countdown yet — user must click Copy to trigger shutdown)
+  const handleUpdate = () => {
+    setShowUpdateModal(false);
+    setIsUpdating(true);
+  };
+
+  // Triggered by Copy button inside ManualUpdatePanel: copy + countdown + shutdown
+  const handleCopyAndShutdown = async () => {
+    try { await navigator.clipboard.writeText(INSTALL_CMD); } catch { /* clipboard blocked */ }
+    copy(INSTALL_CMD);
+    let remaining = UPDATER_CONFIG.shutdownCountdownSec;
+    setShutdownCountdown(remaining);
+    const timer = setInterval(() => {
+      remaining -= 1;
+      setShutdownCountdown(remaining);
+      if (remaining <= 0) {
+        clearInterval(timer);
+        fetch("/api/version/shutdown", { method: "POST" }).catch(() => {});
+        setIsDisconnected(true);
+      }
+    }, 1000);
+  };
+
+  const handleCancelUpdate = () => {
+    setIsUpdating(false);
+    setShutdownCountdown(0);
+  };
+
+  // Note: legacy updater poll removed. New flow: copy install cmd + shutdown server,
+  // user runs the command manually in another terminal.
+
 
   return (
     <>
@@ -176,6 +230,30 @@ export default function Sidebar({ onClose }) {
               <span className="truncate">{authStatus?.displayName || "API Key User"}</span>
             </div>
           )}
+          {updateInfo && !isApiKeyUser && (
+            <div className="flex flex-col gap-1.5 rounded p-1 -m-1">
+              <span className="text-xs font-semibold text-green-600 dark:text-amber-500">
+                ↑ {updateInfo.behindBy ? `Update available: ${updateInfo.behindBy} commit${updateInfo.behindBy > 1 ? 's' : ''} behind` : `New version: ${updateInfo.latestVersion}`}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowUpdateModal(true)}
+                  className="px-2 py-1 rounded bg-green-600 hover:bg-green-700 dark:bg-amber-500 dark:hover:bg-amber-600 text-white text-[11px] font-semibold transition-colors cursor-pointer"
+                >
+                  Update now
+                </button>
+                <button
+                  onClick={() => copy(INSTALL_CMD)}
+                  title="Copy install command"
+                  className="flex-1 text-left hover:opacity-80 transition-opacity cursor-pointer min-w-0"
+                >
+                  <code className="block text-[10px] text-green-600/80 dark:text-amber-400/70 font-mono truncate">
+                    {copied ? "✓ copied!" : INSTALL_CMD}
+                  </code>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Navigation */}
@@ -191,82 +269,98 @@ export default function Sidebar({ onClose }) {
             />
           ))}
 
-          {/* FEATURE+ section - custom tools added by this fork */}
+  
+        {/* FEATURE+ section — custom tools added by this fork */}
           {filteredWorkshopItems.length > 0 && (
-            <div className="pt-3 mt-2 space-y-0.5">
-              <p className="px-4 text-xs font-semibold text-text-muted/60 uppercase tracking-wider mb-2">
-                FEATURE+
-              </p>
-              {filteredWorkshopItems.map((item) => (
-                <NavLink
-                  key={item.href}
-                  href={item.href}
-                  icon={item.icon}
-                  label={item.label}
-                  active={isActive(item.href)}
-                  onClick={onClose}
-                />
-              ))}
-            </div>
+          <div className="pt-3 mt-2 space-y-0.5">
+            <p className="px-4 text-xs font-semibold text-text-muted/60 uppercase tracking-wider mb-2">
+              FEATURE+
+            </p>
+            {filteredWorkshopItems.map((item) => (
+              <NavLink
+                key={item.href}
+                href={item.href}
+                icon={item.icon}
+                label={item.label}
+                active={isActive(item.href)}
+                onClick={onClose}
+              />
+            ))}
+          </div>
           )}
 
-          {/* System section - an API key session sees only the parts it may use */}
-          {(!isApiKeyUser || canOpenMedia || filteredSystemItems.length > 0 || filteredDebugItems.length > 0) && (
-            <div className="pt-3 mt-2 space-y-0.5">
-              <p className="px-4 text-xs font-semibold text-text-muted/60 uppercase tracking-wider mb-2">
-                System
-              </p>
+          {/* System section — admin only, hidden from key sessions */}
+          {!isApiKeyUser && (
+          <div className="pt-3 mt-2 space-y-0.5">
+            <p className="px-4 text-xs font-semibold text-text-muted/60 uppercase tracking-wider mb-2">
+              System
+            </p>
 
-              {/* Media Providers accordion */}
-              {canOpenMedia && (
-              <button
-                onClick={() => setMediaOpen((v) => !v)}
-                className={cn(
-                  "relative w-full flex items-center gap-3 px-3 py-[7px] rounded-[10px] transition-all group",
-                  pathname.startsWith("/dashboard/media-providers")
-                    ? "bg-primary/10 text-primary"
-                    : "text-text-muted hover:bg-surface-2 hover:text-text-main"
-                )}
-              >
-                {pathname.startsWith("/dashboard/media-providers") && (
-                  <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full bg-primary" />
-                )}
-                <span className="material-symbols-outlined size-[18px] text-[18px] leading-none shrink-0">perm_media</span>
-                <span className="text-[13px] font-medium leading-none flex-1 text-left min-w-0 truncate" title="Media Providers">Media Providers</span>
-                {MEDIA_PROVIDER_KINDS.some((k) => VISIBLE_MEDIA_KINDS.includes(k.id) && k.isNew) && (
-                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-[3px] bg-green-500/15 text-green-400">NEW</span>
-                )}
-                <span className="material-symbols-outlined text-[14px] transition-transform" style={{ transform: mediaOpen ? "rotate(180deg)" : "rotate(0deg)" }}>
-                  expand_more
-                </span>
-              </button>
+            {/* Media Providers accordion */}
+            <button
+              onClick={() => setMediaOpen((v) => !v)}
+              className={cn(
+                "relative w-full flex items-center gap-3 px-3 py-[7px] rounded-[10px] transition-all group",
+                pathname.startsWith("/dashboard/media-providers")
+                  ? "bg-primary/10 text-primary"
+                  : "text-text-muted hover:bg-surface-2 hover:text-text-main"
               )}
-              {canOpenMedia && mediaOpen && (
-                <div className="pl-4">
-                  {MEDIA_PROVIDER_KINDS.filter((k) => VISIBLE_MEDIA_KINDS.includes(k.id)).map((kind) => (
-                    <NavLink
-                      key={kind.id}
-                      href={`/dashboard/media-providers/${kind.id}`}
-                      icon={kind.icon}
-                      label={kind.label}
-                      active={pathname.startsWith(`/dashboard/media-providers/${kind.id}`)}
-                      onClick={onClose}
-                      sub
-                    />
-                  ))}
+            >
+              {pathname.startsWith("/dashboard/media-providers") && (
+                <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full bg-primary" />
+              )}
+              <span className="material-symbols-outlined size-[18px] text-[18px] leading-none shrink-0">perm_media</span>
+              <span className="text-[13px] font-medium leading-none flex-1 text-left min-w-0 truncate" title="Media Providers">Media Providers</span>
+              {MEDIA_PROVIDER_KINDS.some((k) => VISIBLE_MEDIA_KINDS.includes(k.id) && k.isNew) && (
+                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-[3px] bg-green-500/15 text-green-400">NEW</span>
+              )}
+              <span className="material-symbols-outlined text-[14px] transition-transform" style={{ transform: mediaOpen ? "rotate(180deg)" : "rotate(0deg)" }}>
+                expand_more
+              </span>
+            </button>
+            {mediaOpen && (
+              <div className="pl-4">
+                {MEDIA_PROVIDER_KINDS.filter((k) => VISIBLE_MEDIA_KINDS.includes(k.id)).map((kind) => (
                   <NavLink
-                    key={COMBINED_WEB_ITEM.id}
-                    href={COMBINED_WEB_ITEM.href}
-                    icon={COMBINED_WEB_ITEM.icon}
-                    label={COMBINED_WEB_ITEM.label}
-                    active={pathname.startsWith(COMBINED_WEB_ITEM.href)}
+                    key={kind.id}
+                    href={`/dashboard/media-providers/${kind.id}`}
+                    icon={kind.icon}
+                    label={kind.label}
+                    active={pathname.startsWith(`/dashboard/media-providers/${kind.id}`)}
                     onClick={onClose}
                     sub
                   />
-                </div>
-              )}
+                ))}
+                <NavLink
+                  key={COMBINED_WEB_ITEM.id}
+                  href={COMBINED_WEB_ITEM.href}
+                  icon={COMBINED_WEB_ITEM.icon}
+                  label={COMBINED_WEB_ITEM.label}
+                  active={pathname.startsWith(COMBINED_WEB_ITEM.href)}
+                  onClick={onClose}
+                  sub
+                />
+              </div>
+            )}
 
-              {filteredSystemItems.map((item) => (
+            {systemItems.map((item) => (
+              <NavLink
+                key={item.href}
+                href={item.href}
+                icon={item.icon}
+                label={item.label}
+                active={isActive(item.href)}
+                onClick={onClose}
+              />
+            ))}
+
+            {/* Debug items (inside System section, before Settings) */}
+            {debugItems.map((item) => {
+              const showTranslator = item.href !== '/dashboard/translator' || enableTranslator;
+              // Upstream Watch is maintainer-only (behind the scenes, not for end users).
+              const showUpstream = item.href !== '/dashboard/upstream-watch' || maintainerMode;
+              const show = showTranslator && showUpstream;
+              return show ? (
                 <NavLink
                   key={item.href}
                   href={item.href}
@@ -274,40 +368,66 @@ export default function Sidebar({ onClose }) {
                   label={item.label}
                   active={isActive(item.href)}
                   onClick={onClose}
+                  dot={item.href === '/dashboard/upstream-watch' ? upstreamDot : false}
                 />
-              ))}
+              ) : null;
+            })}
 
-              {/* Debug items (inside System section, before Settings) */}
-              {filteredDebugItems.map((item) => {
-                const show = item.href !== '/dashboard/translator' || enableTranslator;
-                return show ? (
-                  <NavLink
-                    key={item.href}
-                    href={item.href}
-                    icon={item.icon}
-                    label={item.label}
-                    active={isActive(item.href)}
-                    onClick={onClose}
-                  />
-                ) : null;
-              })}
-
-
-              {/* Settings */}
-              {!isApiKeyUser && (
-              <NavLink
-                href='/dashboard/profile'
-                icon='settings'
-                label='9Router Settings'
-                active={isActive('/dashboard/profile')}
-                onClick={onClose}
-              />
-              )}
-            </div>
+            {/* Settings */}
+            <NavLink
+              href='/dashboard/profile'
+              icon='settings'
+              label='9Router Settings'
+              active={isActive('/dashboard/profile')}
+              onClick={onClose}
+            />
+          </div>
           )}
         </nav>
 
       </aside>
+
+      {/* Update Confirmation Modal */}
+      <ConfirmModal
+        isOpen={showUpdateModal}
+        onClose={() => setShowUpdateModal(false)}
+        onConfirm={handleUpdate}
+        title="Update 9Router"
+        message={`Show install command for v${updateInfo?.latestVersion || ""}? You can copy it and shutdown to install manually.`}
+        confirmText="Show Command"
+        cancelText="Cancel"
+        variant="primary"
+      />
+
+      {/* Disconnected / Updating Overlay */}
+      {(isDisconnected || isUpdating) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-6">
+          {isUpdating ? (
+            <ManualUpdatePanel
+              latestVersion={updateInfo?.latestVersion}
+              installCmd={INSTALL_CMD}
+              installDir={updateInfo?.installDir}
+              startHint={updateInfo?.startHint}
+              copied={copied}
+              onCopyAndShutdown={handleCopyAndShutdown}
+              onCancel={handleCancelUpdate}
+              countdown={shutdownCountdown}
+              isDisconnected={isDisconnected}
+            />
+          ) : (
+            <div className="text-center p-8">
+              <div className="flex items-center justify-center size-16 rounded-full bg-red-500/20 text-red-500 mx-auto mb-4">
+                <span className="material-symbols-outlined text-[32px]">power_off</span>
+              </div>
+              <h2 className="text-xl font-semibold text-white mb-2">Server Disconnected</h2>
+              <p className="text-text-muted mb-6">The proxy server has been stopped.</p>
+              <Button variant="secondary" onClick={() => globalThis.location.reload()}>
+                Reload Page
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
     </>
   );
 }
@@ -316,3 +436,63 @@ Sidebar.propTypes = {
   onClose: PropTypes.func,
 };
 
+function ManualUpdatePanel({ latestVersion, installCmd, installDir, startHint, copied, onCopyAndShutdown, onCancel, countdown, isDisconnected }) {
+  const isCountingDown = countdown > 0;
+  return (
+    <div className="w-full max-w-lg rounded-xl bg-neutral-900/95 border border-white/10 p-6 text-white">
+      <div className="flex items-center gap-3 mb-4">
+        <div className="flex items-center justify-center size-11 rounded-full bg-amber-500/20 text-amber-400">
+          <span className="material-symbols-outlined text-[24px]">content_copy</span>
+        </div>
+        <div>
+          <h2 className="text-lg font-semibold">Update 9Router{latestVersion ? ` to v${latestVersion}` : ""}</h2>
+          <p className="text-xs text-white/60">
+            {isDisconnected
+              ? "Server stopped. Paste the command into a terminal to install."
+              : isCountingDown
+                ? `Command copied. Server will stop in ${countdown}s...`
+                : "Click the button below to copy the install command and shutdown."}
+          </p>
+        </div>
+      </div>
+
+      <p className="text-sm text-white/80 mb-2">Update command (works from any folder — it jumps to the right one first, backs up your data, then restarts itself):</p>
+      <div className="w-full px-3 py-2 rounded bg-white/5 mb-4">
+        <code className="text-xs font-mono text-amber-400 break-all">{installCmd}</code>
+      </div>
+
+      <ol className="text-xs text-white/70 space-y-1 list-decimal list-inside mb-4">
+        <li>Click <strong>Copy & Shutdown</strong> below.</li>
+        <li>Open a terminal, paste the command, press Enter — wait until it prints ✅ (a few minutes for the build).</li>
+        <li>Reload this page — the sidebar should show the new version. Done, no manual restart needed.</li>
+      </ol>
+
+      {isDisconnected ? (
+        <Button variant="secondary" fullWidth onClick={() => globalThis.location.reload()}>
+          Reload Page
+        </Button>
+      ) : (
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={onCancel} disabled={isCountingDown}>
+            Cancel
+          </Button>
+          <Button variant="primary" fullWidth onClick={onCopyAndShutdown} disabled={isCountingDown}>
+            {copied ? "✓ Copied — shutting down..." : isCountingDown ? `Shutting down in ${countdown}s` : "Copy & Shutdown"}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+ManualUpdatePanel.propTypes = {
+  latestVersion: PropTypes.string,
+  installCmd: PropTypes.string.isRequired,
+  installDir: PropTypes.string,
+  startHint: PropTypes.string,
+  copied: PropTypes.bool,
+  onCopyAndShutdown: PropTypes.func.isRequired,
+  onCancel: PropTypes.func.isRequired,
+  countdown: PropTypes.number,
+  isDisconnected: PropTypes.bool,
+};

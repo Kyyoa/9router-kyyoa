@@ -42,7 +42,7 @@ export function ls(input) {
     if (!parsed) continue;
     if (parsed.name === "." || parsed.name === "..") continue;
 
-    // Rust ls.rs: show_all flag respected — for LLM context always skip noise
+    // Rust ls.rs: show_all flag respected - for LLM context always skip noise
     if (LS_NOISE_DIRS.includes(parsed.name)) continue;
 
     if (parsed.fileType === "d") {

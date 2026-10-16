@@ -170,7 +170,7 @@ export function defaultClaudeToolType(tools) {
 // Whether Claude-format tools need explicit `type` defaulting before dispatch.
 // Only gateways that declare the `requireClaudeToolType` quirk (MiniMax) reject typeless
 // tools. Applying the default globally breaks Claude-format endpoints that only accept the
-// legacy typeless tool shape — DeepSeek's Anthropic-compatible endpoint answers HTTP 400
+// legacy typeless tool shape - DeepSeek's Anthropic-compatible endpoint answers HTTP 400
 // "unknown variant `custom`" and every Claude Code request routed there fails (#3905).
 export function shouldDefaultClaudeToolType(provider, finalFormat, tools, PROVIDERS) {
   return (

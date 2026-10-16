@@ -9,6 +9,10 @@ const variants = {
     "bg-surface-2 hover:bg-surface-3 text-text-main border border-border hover:border-brand-500/30 disabled:opacity-50",
   outline:
     "border border-border text-text-main hover:bg-surface-2 hover:border-brand-500/40",
+  // Opt-in only (one caller: providers "Add OpenAI Compatible"). Fixed white in
+  // every theme, so it stays legible on the glass aurora and on light surfaces.
+  white:
+    "bg-white text-neutral-900 border border-black/15 dark:border-white/30 shadow-sm hover:bg-neutral-100 hover:shadow disabled:shadow-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500",
   ghost: "text-text-muted hover:bg-surface-2 hover:text-text-main",
   danger:
     "bg-red-500 hover:bg-red-600 text-white shadow-sm disabled:bg-surface-3 disabled:text-text-muted",
@@ -17,6 +21,7 @@ const variants = {
 };
 
 const sizes = {
+  xs: "h-6 px-2.5 text-[11px] rounded-[6px] gap-1.5",
   sm: "h-7 px-3 text-xs rounded-[8px]",
   md: "h-9 px-4 text-sm rounded-[10px]",
   lg: "h-11 px-6 text-sm rounded-[10px]",
@@ -48,13 +53,13 @@ export default function Button({
       {...props}
     >
       {loading ? (
-        <span className="material-symbols-outlined animate-spin text-[18px]">progress_activity</span>
+        <span className={cn("material-symbols-outlined animate-spin", size === "xs" ? "text-[14px]" : "text-[18px]")}>progress_activity</span>
       ) : icon ? (
-        <span className="material-symbols-outlined text-[18px]">{icon}</span>
+        <span className={cn("material-symbols-outlined", size === "xs" ? "text-[14px]" : "text-[18px]")}>{icon}</span>
       ) : null}
       {children}
       {iconRight && !loading && (
-        <span className="material-symbols-outlined text-[18px]">{iconRight}</span>
+        <span className={cn("material-symbols-outlined", size === "xs" ? "text-[14px]" : "text-[18px]")}>{iconRight}</span>
       )}
     </button>
   );

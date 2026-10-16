@@ -16,7 +16,7 @@
 // checks ran on the raw string without normalizing a trailing dot ("localhost."),
 // and the IPv6 check only recognized one textual representation of an IPv4-mapped
 // address (dotted "::ffff:a.b.c.d") while Node/WHATWG URL parsing can normalize the
-// same address to hex form ("::ffff:7f00:1") — a mismatch, not an oversight.
+// same address to hex form ("::ffff:7f00:1") - a mismatch, not an oversight.
 
 import dns from "node:dns";
 
@@ -41,7 +41,7 @@ function ipv4ToInt(host) {
 const BLOCKED_V4_RANGES = [
   [ipv4ToInt("0.0.0.0"), 8],
   [ipv4ToInt("10.0.0.0"), 8],
-  [ipv4ToInt("100.64.0.0"), 10], // CGNAT — also used by some cloud metadata proxies
+  [ipv4ToInt("100.64.0.0"), 10], // CGNAT - also used by some cloud metadata proxies
   [ipv4ToInt("127.0.0.0"), 8],
   [ipv4ToInt("169.254.0.0"), 16], // includes 169.254.169.254 cloud metadata
   [ipv4ToInt("172.16.0.0"), 12],
@@ -75,8 +75,8 @@ function parseHextets(s) {
 // Parse any textual IPv6 representation (including an embedded dotted-IPv4 tail,
 // "::" compression in any position, and full/partial forms) into 8 16-bit groups.
 // Returns null if the string isn't a valid IPv6 literal. Parsing into groups once
-// and reasoning about the numeric value — rather than pattern-matching the source
-// string — is what makes this immune to "which textual form did the URL parser
+// and reasoning about the numeric value - rather than pattern-matching the source
+// string - is what makes this immune to "which textual form did the URL parser
 // pick" bugs: "::ffff:127.0.0.1" and "::ffff:7f00:1" produce identical groups.
 function parseIPv6ToGroups(rawHost) {
   let host = rawHost.toLowerCase();
@@ -89,7 +89,7 @@ function parseIPv6ToGroups(rawHost) {
     v4Groups = [(v4Int >>> 16) & 0xffff, v4Int & 0xffff];
     host = host.slice(0, host.length - v4TailMatch[1].length);
     if (host.endsWith("::")) {
-      // "::" compression marker itself — leave both colons, the removed IPv4
+      // "::" compression marker itself - leave both colons, the removed IPv4
       // fills the gap it represents.
     } else if (host.endsWith(":")) {
       host = host.slice(0, -1); // was just the "prevgroup:ipv4" separator
@@ -126,14 +126,14 @@ function isBlockedIpv6Groups(g) {
   if ((g[0] & 0xffc0) === 0xfe80) return true;
   // unique local fc00::/7
   if ((g[0] & 0xfe00) === 0xfc00) return true;
-  // IPv4-mapped ::ffff:0:0/96 (0:0:0:0:0:ffff:a.b.c.d — the 0xffff marker is
-  // group index 5) and NAT64 well-known prefix 64:ff9b::/96 — both embed a
+  // IPv4-mapped ::ffff:0:0/96 (0:0:0:0:0:ffff:a.b.c.d - the 0xffff marker is
+  // group index 5) and NAT64 well-known prefix 64:ff9b::/96 - both embed a
   // real IPv4 address in the low 32 bits; check it against the same IPv4
   // blocklist regardless of which prefix wraps it.
   const low32 = ((g[6] << 16) | g[7]) >>> 0;
   if ([0, 1, 2, 3, 4].every(isZero) && g[5] === 0xffff) return isBlockedIpv4Int(low32);
   if (g[0] === 0x0064 && g[1] === 0xff9b && [2, 3, 4, 5].every(isZero)) return isBlockedIpv4Int(low32);
-  // IPv4-compatible ::a.b.c.d/96 (deprecated, still parseable) — excludes :: and ::1
+  // IPv4-compatible ::a.b.c.d/96 (deprecated, still parseable) - excludes :: and ::1
   // which already matched above.
   if ([0, 1, 2, 3, 4, 5].every(isZero) && low32 !== 0 && low32 !== 1) return isBlockedIpv4Int(low32);
   return false;
@@ -158,7 +158,7 @@ function isBlockedHost(host) {
 }
 
 // Throw if URL targets a non-public host by literal hostname/IP alone (no DNS
-// resolution — see assertPublicUrlResolved for that). Caller should map to 400.
+// resolution - see assertPublicUrlResolved for that). Caller should map to 400.
 export function assertPublicUrl(rawUrl) {
   const parsed = new URL(rawUrl);
   const host = normalizeHost(parsed.hostname);
@@ -174,7 +174,7 @@ export async function assertPublicUrlResolved(rawUrl) {
   const host = normalizeHost(parsed.hostname);
   if (isBlockedHost(host)) throw new Error("Blocked URL: internal host");
 
-  // Already a literal IPv4/IPv6 address — isBlockedHost above already covered it,
+  // Already a literal IPv4/IPv6 address - isBlockedHost above already covered it,
   // no DNS lookup applies (and dns.lookup would just echo it back anyway).
   const bracketless = host.replace(/^\[|\]$/g, "");
   if (ipv4ToInt(bracketless) !== null || bracketless.includes(":")) return;
@@ -183,7 +183,7 @@ export async function assertPublicUrlResolved(rawUrl) {
   try {
     addresses = await dns.promises.lookup(host, { all: true, verbatim: true });
   } catch {
-    // Resolution failure isn't an SSRF signal by itself — let the subsequent
+    // Resolution failure isn't an SSRF signal by itself - let the subsequent
     // fetch() fail with its own (clearer) network error.
     return;
   }

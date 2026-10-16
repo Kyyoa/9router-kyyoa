@@ -10,7 +10,7 @@ const FIELD_SCHEMA = {
   costPerQuery:     { label: "Cost / call", format: (v) => v === 0 ? "Free" : `$${v.toFixed(4)}` },
   pricingUrl:       { label: "Pricing",    format: () => "View pricing", isLink: true },
   freeTier:         { label: "Free tier",  format: (v) => v },
-  freeMonthlyQuota: { label: "Free quota",  format: (v) => v === 0 ? "—" : v >= 999999 ? "Unlimited" : `${v.toLocaleString()} / mo` },
+  freeMonthlyQuota: { label: "Free quota",  format: (v) => v === 0 ? "n/a" : v >= 999999 ? "Unlimited" : `${v.toLocaleString()} / mo` },
   searchTypes:      { label: "Types",      format: (v) => v.join(", ") },
   formats:          { label: "Formats",    format: (v) => v.join(", ") },
   maxMaxResults:    { label: "Max results", format: (v) => v },

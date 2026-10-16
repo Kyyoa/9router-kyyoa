@@ -13,14 +13,14 @@ export function injectSystemPrompt(body, format, prompt) {
     if (!body || !prompt) return;
     if (typeof body !== "object") return;
 
-    // Kiro wire shape is unique (conversationState) — handle directly.
+    // Kiro wire shape is unique (conversationState) - handle directly.
     if (isKiroBody(body) || format === FORMATS.KIRO) {
       injectKiroSystem(body, prompt);
       return;
     }
 
     // Claude/Gemini own a dedicated system field, yet their bodies also carry
-    // messages[]/contents[] — decide by format label before the shape sniff below.
+    // messages[]/contents[] - decide by format label before the shape sniff below.
     // Anthropic rejects a "system" role inside messages[] (no such input role).
     if (format === FORMATS.CLAUDE) {
       injectClaudeSystem(body, prompt);
@@ -53,7 +53,7 @@ export function injectSystemPrompt(body, format, prompt) {
       return;
     }
 
-    // OpenAI-shaped but no array (e.g. empty body) — no-op
+    // OpenAI-shaped but no array (e.g. empty body) - no-op
   } catch (_) {
     // fail-open
   }
@@ -261,7 +261,7 @@ function injectGeminiSystem(body, prompt) {
 }
 
 // ---- Kiro ----
-// The prompt is appended to the first user turn's content — the same place the
+// The prompt is appended to the first user turn's content - the same place the
 // Kiro translator already mirrors the system text via its contentPrefix.
 //
 // A top-level `systemPrompt` is deliberately NOT written: the kiro.dev gateway
@@ -287,7 +287,7 @@ function injectKiroSystem(body, prompt) {
 
     const content = typeof targetMsg.content === "string" ? targetMsg.content : "";
     const next = dedupStringAppend(content, prompt);
-    if (next === content) return; // already injected — idempotent across retries
+    if (next === content) return; // already injected - idempotent across retries
     try { targetMsg.content = next; } catch (_) { /* frozen/proxy fail-open */ }
   } catch (_) {}
 }

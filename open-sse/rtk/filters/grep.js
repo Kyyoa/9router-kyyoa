@@ -1,5 +1,5 @@
 // Port of grep_wrapper (rtk/src/cmds/system/pipe_cmd.rs:50-86)
-// Input format: "file:lineno:content" — splitn(3, ':') in Rust
+// Input format: "file:lineno:content" - splitn(3, ':') in Rust
 import { GREP_PER_FILE_MAX } from "../constants.js";
 
 export function grep(input) {
@@ -7,7 +7,7 @@ export function grep(input) {
   let total = 0;
 
   for (const line of input.split("\n")) {
-    // splitn(3, ':') — only split on first 2 colons
+    // splitn(3, ':') - only split on first 2 colons
     const first = line.indexOf(":");
     if (first === -1) continue;
     const second = line.indexOf(":", first + 1);

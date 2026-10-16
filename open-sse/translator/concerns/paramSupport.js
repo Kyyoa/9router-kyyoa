@@ -14,9 +14,6 @@ const STRIP_RULES = [
   { provider: "github", match: (m) => /claude/i.test(m) && !/claude.*(opus|sonnet).*4\.6/i.test(m), drop: ["thinking", "reasoning_effort"] },
   // Cloudflare Workers AI: content must be plain string, rejects OpenAI content-part array (#1926)
   { provider: "cloudflare-ai", flattenContent: true },
-  // MiMo Desktop Preview models (account-service route): content must be plain string,
-  // rejects OpenAI content-part array. Cloud models keep their parts (mimo-v2-omni is multi-modal).
-  { provider: "xiaomi-mimo", match: /preview/i, flattenContent: true },
   { provider: "volcengine-ark", match: /glm-5/i, clampToModelMaxOutput: true },
   // VolcEngine Ark caps the Kimi family at max_tokens <= 32768, but the model's
   // advertised ceiling is far higher (Kimi-K2.7-Code resolves to maxOutput 262144),
@@ -33,6 +30,15 @@ const STRIP_RULES = [
   { provider: "groq", dropMessageFields: ["reasoning_content", "reasoning", "reasoning_details"] },
   { provider: "mistral", dropMessageFields: ["reasoning_content", "reasoning", "reasoning_details"] },
   { provider: "cerebras", dropMessageFields: ["reasoning_content", "reasoning", "reasoning_details"] },
+  // OpenCode Go's relay rejects `response_format` for its deepseek family with HTTP
+  // 400 — both json_schema and json_object — while glm / kimi / mimo / minimax /
+  // qwen / grok / gpt on the same relay accept it. The rejection body is either a
+  // bare model echo (`{"model":"deepseek-v4.1-flash"}`, which names neither the
+  // field nor the reason) or "This response_format type is unavailable now", so a
+  // client cannot classify it and keeps re-sending the field. Measured 2026-10-13
+  // against /zen/go/v1/chat/completions with one key: 12/12 structured calls 400,
+  // 4/4 identical calls without the field 200.
+  { provider: "opencode-go", match: /^deepseek/i, drop: ["response_format"] },
 ];
 
 // Test a rule's match (regex or predicate) against the model id.
@@ -56,7 +62,7 @@ export function stripUnsupportedParams(provider, model, body) {
     for (const key of rule.drop || []) {
       if (body[key] !== undefined) delete body[key];
     }
-    // Per-message field drop (assistant turns only — that is where clients replay reasoning).
+    // Per-message field drop (assistant turns only - that is where clients replay reasoning).
     if (Array.isArray(rule.dropMessageFields) && Array.isArray(body.messages)) {
       for (const msg of body.messages) {
         if (!msg || msg.role !== "assistant") continue;

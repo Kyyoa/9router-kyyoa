@@ -26,7 +26,7 @@ function skipped(reason, extra = {}) {
 }
 
 // Transform a Claude-format request body through pxpipe. Returns
-// { body: <new body object> | null, summary } — body is null when nothing changed.
+// { body: <new body object> | null, summary } - body is null when nothing changed.
 // opts.transform is injected by the host (src side) so open-sse stays free of
 // filesystem/install concerns and remains usable standalone.
 export async function compressWithPxpipe(body, { enabled, format, model, minChars, timeoutMs, transform } = {}) {
@@ -70,7 +70,7 @@ export async function compressWithPxpipe(body, { enabled, format, model, minChar
     const imagedChars = info.compressedChars || 0;
     // The transformed body is BIGGER in bytes (base64 PNGs) but cheaper in tokens:
     // images bill by pixels (Anthropic: pixels/750), not by encoded length. So the
-    // after-estimate is remaining-text tokens + image tokens — never chars/4 of the
+    // after-estimate is remaining-text tokens + image tokens - never chars/4 of the
     // new body. Provider-billed usage recorded per request stays the ground truth.
     const imageTokensEst = info.imageTokens
       || (info.imagePixels ? Math.round(info.imagePixels / 750) : (info.imageCount || 0) * 4761);

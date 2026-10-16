@@ -1,13 +1,13 @@
 // Tool-calling auto fallback.
 //
-// Two jobs, both fail-open — a bug here must never turn a working request into
+// Two jobs, both fail-open - a bug here must never turn a working request into
 // a broken one, so every path returns the input untouched on any error:
 //
-//   repair()  — malform the payload before dispatch: malformed tool arguments,
+//   repair()  - malform the payload before dispatch: malformed tool arguments,
 //               orphaned tool results, a tool_choice pointing at a tool that
 //               does not exist. One bad shape would otherwise burn every member
 //               of a combo before the first one could answer.
-//   degrade() — when an upstream rejects the request outright (400/404/422), drop
+//   degrade() - when an upstream rejects the request outright (400/404/422), drop
 //               the tool machinery in escalating steps so the turn degrades into
 //               a plain chat turn with the tool history inlined as prose, instead
 //               of surfacing a tool error to the caller.
@@ -221,7 +221,7 @@ export function repair(body, format) {
         ));
     }
 
-    // Drop tool results nothing asked for — a stale id is a hard 400 upstream.
+    // Drop tool results nothing asked for - a stale id is a hard 400 upstream.
     if (Array.isArray(body.messages)) {
       const openAIIds = collectOpenAIIds(body.messages);
       const claudeIds = collectClaudeIds(body.messages);
@@ -278,7 +278,7 @@ const TOOL_CALL_PREFIX = "[Called tools: ";
 
 // Rewrite tool turns into plain prose so the history survives once the tool
 // definitions are gone. Without this the provider rejects a tool result that has
-// no matching tool call — the error the fallback is trying to escape.
+// no matching tool call - the error the fallback is trying to escape.
 function flattenOpenAI(messages) {
   const out = [];
   for (const msg of messages) {

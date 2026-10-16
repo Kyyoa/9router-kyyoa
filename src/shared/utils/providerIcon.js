@@ -11,6 +11,9 @@ const ICON_ALIASES = {
   "deepseek-web": "deepseek",
   "gemini-web": "gemini",
   "kimi-web": "kimi",
+  // MiniMax Code rides the existing MiniMax brand mark
+  "minimax-code": "minimax",
+  "minimax-code-global": "minimax",
 };
 
 const TYPE_PREFIX_ALIASES = {
@@ -19,7 +22,7 @@ const TYPE_PREFIX_ALIASES = {
   "custom-embedding-": "selfhosted-embedding",
 };
 
-// Runtime only — first 404 remembers id for the whole session
+// Runtime only - first 404 remembers id for the whole session
 const failedIds = new Set();
 
 function normalizeId(providerId) {

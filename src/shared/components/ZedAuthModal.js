@@ -315,7 +315,7 @@ export default function ZedAuthModal({ isOpen, providerInfo, onSuccess, onClose 
                   check_circle
                 </span>
                 <p className="text-sm text-green-800 dark:text-green-200">
-                  Zed IDE session detected (user {ideSession.userId}). Import failed — retry or use browser sign-in below.
+                  Zed IDE session detected (user {ideSession.userId}). Import failed - retry or use browser sign-in below.
                 </p>
               </div>
             </div>

@@ -3,8 +3,8 @@
 // database key, never a label: it turns up as a group heading in the model
 // picker whenever a node record is not at hand to name the group.
 //
-// The picker resolves names from two sources that do not always agree — the
-// static provider registry and the node list fetched from /api/provider-nodes —
+// The picker resolves names from two sources that do not always agree - the
+// static provider registry and the node list fetched from /api/provider-nodes -
 // so this module is the one place that decides what a provider is called, and
 // what happens when neither source knows it.
 

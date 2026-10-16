@@ -26,7 +26,7 @@ export function compressMessages(body, enabled) {
       const msg = items[i];
       if (!msg) continue;
 
-      // Shape 4: OpenAI Responses — top-level { type:"function_call_output", output: string | [{type:"input_text", text}] }
+      // Shape 4: OpenAI Responses - top-level { type:"function_call_output", output: string | [{type:"input_text", text}] }
       if (msg.type === "function_call_output") {
         if (typeof msg.output === "string") {
           msg.output = compressText(msg.output, stats, "openai-responses-string");
@@ -41,7 +41,7 @@ export function compressMessages(body, enabled) {
         continue;
       }
 
-      // Shape 1: OpenAI tool message — { role:"tool", content: "string" }
+      // Shape 1: OpenAI tool message - { role:"tool", content: "string" }
       if (msg.role === "tool" && typeof msg.content === "string") {
         msg.content = compressText(msg.content, stats, "openai-tool");
         continue;
@@ -49,7 +49,7 @@ export function compressMessages(body, enabled) {
 
       if (!Array.isArray(msg.content)) continue;
 
-      // Shape 1b: OpenAI tool message — { role:"tool", content:[{type:"text", text:"..."}] }
+      // Shape 1b: OpenAI tool message - { role:"tool", content:[{type:"text", text:"..."}] }
       if (msg.role === "tool") {
         for (let k = 0; k < msg.content.length; k++) {
           const part = msg.content[k];
@@ -70,7 +70,7 @@ export function compressMessages(body, enabled) {
           // Shape 2: claude string form
           block.content = compressText(block.content, stats, "claude-string");
         } else if (Array.isArray(block.content)) {
-          // Shape 3: claude array form — compress each text part
+          // Shape 3: claude array form - compress each text part
           for (let k = 0; k < block.content.length; k++) {
             const part = block.content[k];
             if (part && part.type === "text" && typeof part.text === "string") {

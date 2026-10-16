@@ -2,13 +2,21 @@
 
 import { cn } from "@/shared/utils/cn";
 
+// Radius is the only thing the contract changes here. A badge was a pill
+// (rounded-full), which put it in the same shape family as the Toggle track -
+// genuinely circular and genuinely interactive. A badge is a label, so it
+// takes the chip radius (--r-chip). The variant colours keep their explicit
+// dark: pairs: they were already correct on both themes, and swapping them for
+// the semantic scale would have dropped the light-mode text contrast
+// (green-600 -> --color-success is a 3.4:1 -> 2.6:1 regression on the
+// 10%-tinted background).
 const variants = {
   default: "bg-surface-2 text-text-muted ring-1 ring-inset ring-border-subtle",
   primary: "bg-brand-500/10 text-brand-600 dark:text-brand-300 ring-1 ring-inset ring-brand-500/20",
-  success: "bg-green-500/10 text-green-600 dark:text-green-400 ring-1 ring-inset ring-green-500/20",
-  warning: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 ring-1 ring-inset ring-yellow-500/20",
-  error: "bg-red-500/10 text-red-600 dark:text-red-400 ring-1 ring-inset ring-red-500/20",
-  info: "bg-blue-500/10 text-blue-600 dark:text-blue-400 ring-1 ring-inset ring-blue-500/20",
+  success: "bg-success/10 text-success ring-1 ring-inset ring-success/20",
+  warning: "bg-warning/10 text-warning ring-1 ring-inset ring-warning/20",
+  error: "bg-danger/10 text-danger ring-1 ring-inset ring-danger/20",
+  info: "bg-info/10 text-info ring-1 ring-inset ring-info/20",
 };
 
 const sizes = {
@@ -28,9 +36,9 @@ export default function Badge({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full font-semibold",
-        variants[variant],
-        sizes[size],
+        "inline-flex items-center gap-1.5 rounded-[var(--r-chip)] font-semibold",
+        variants[variant] ?? variants.default,
+        sizes[size] ?? sizes.md,
         className
       )}
     >
@@ -38,12 +46,12 @@ export default function Badge({
         <span
           className={cn(
             "size-1.5 rounded-full",
-            variant === "success" && "bg-green-500",
-            variant === "warning" && "bg-yellow-500",
-            variant === "error" && "bg-red-500",
-            variant === "info" && "bg-blue-500",
+            variant === "success" && "bg-success",
+            variant === "warning" && "bg-warning",
+            variant === "error" && "bg-danger",
+            variant === "info" && "bg-info",
             variant === "primary" && "bg-brand-500",
-            variant === "default" && "bg-gray-400"
+            variant === "default" && "bg-text-muted"
           )}
         />
       )}

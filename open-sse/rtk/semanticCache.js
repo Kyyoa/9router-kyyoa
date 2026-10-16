@@ -6,8 +6,47 @@
 import crypto from "crypto";
 
 const responseCache = new Map();
-// Basic TTL of 3 hours for cache entries to avoid memory leak
-const CACHE_TTL_MS = 3 * 60 * 60 * 1000;
+
+// TTL is configurable because a three hour window is wrong for some workloads:
+// a long agent session needs a long window, while a shared proxy on a fast
+// rotating IP wants a short one so answers never go stale.
+let cacheTtlMs = 3 * 60 * 60 * 1000; // 3 hours, the historical default
+let maxEntries = 1000; // historical hard cap
+
+export function setSemanticCacheMaxEntries(n) {
+  const v = Math.floor(Number(n));
+  if (Number.isFinite(v) && v >= 10) maxEntries = Math.min(v, 10000);
+}
+
+export function getSemanticCacheMaxEntries() {
+  return maxEntries;
+}
+
+
+export function setSemanticCacheTtlMs(ms) {
+  const n = Number(ms);
+  if (!Number.isFinite(n) || n <= 0) return;
+  cacheTtlMs = Math.min(Math.max(n, 60 * 1000), 30 * 24 * 60 * 60 * 1000);
+}
+
+export function getSemanticCacheTtlMs() {
+  return cacheTtlMs;
+}
+
+// Counters make the saving visible. Without them the toggle is unfalsifiable:
+// the user cannot tell a working cache from one that never hits.
+const stats = { hits: 0, misses: 0, saves: 0, evictions: 0 };
+
+export function getSemanticCacheStats() {
+  return { ...stats, entries: responseCache.size, ttlMs: cacheTtlMs };
+}
+
+export function resetSemanticCacheStats() {
+  stats.hits = 0;
+  stats.misses = 0;
+  stats.saves = 0;
+  stats.evictions = 0;
+}
 
 function hashObject(obj) {
   try {
@@ -35,11 +74,16 @@ export function checkSemanticCache(body, model) {
 
   const cached = responseCache.get(hashKey);
   if (cached && Date.now() < cached.expiresAt) {
+    stats.hits++;
     return cached.response;
   }
 
   // Cleanup expired entries when reading
-  if (cached) responseCache.delete(hashKey);
+  if (cached) {
+    responseCache.delete(hashKey);
+    stats.evictions++;
+  }
+  stats.misses++;
   return null;
 }
 
@@ -62,12 +106,14 @@ export function saveToSemanticCache(body, model, responseBody) {
 
   responseCache.set(hashKey, {
     response: responseBody,
-    expiresAt: Date.now() + CACHE_TTL_MS,
+    expiresAt: Date.now() + cacheTtlMs,
   });
+  stats.saves++;
 
   // Basic cleanup to prevent unlimited memory growth (cap at 1000 entries)
-  if (responseCache.size > 1000) {
+  if (responseCache.size > maxEntries) {
     const oldestKey = responseCache.keys().next().value;
     responseCache.delete(oldestKey);
+    stats.evictions++;
   }
 }

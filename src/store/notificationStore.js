@@ -1,5 +1,5 @@
 /**
- * Notification Store — Zustand-based global toast notification system.
+ * Notification Store - Zustand-based global toast notification system.
  * Centralized feedback for dashboard actions.
  */
 

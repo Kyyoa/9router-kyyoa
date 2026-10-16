@@ -34,13 +34,19 @@ const VIEW_CONFIG = {
   cost:     { dataKey: "cost",     color: "#f59e0b", gradId: "gradCost",     formatter: fmtCost,     label: "Cost" },
 };
 
-export default function UsageChart({ period = "7d" }) {
+// Periods bucketed by day. Their series is a flat baseline with a single
+// spike (one busy day among empty ones), which reads as a straight line rather
+// than a chart - the operator asked for it to be gone. The hour-bucketed
+// periods keep their card, so this returns nothing for the coarse ones.
+const DAILY_PERIODS = new Set(["7d", "30d", "60d", "all"]);
+
+export default function UsageChart({ period = "7d", updateKey = 0 }) {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState("tokens");
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
+  const fetchData = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const res = await fetch(`/api/usage/chart?period=${period}`);
       if (res.ok) {
@@ -50,13 +56,23 @@ export default function UsageChart({ period = "7d" }) {
     } catch (e) {
       console.error("Failed to fetch chart data:", e);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [period]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    if (updateKey > 0) {
+      fetchData(true);
+    }
+  }, [updateKey, fetchData]);
+
+  // Hidden before the first render too: rendering a card and then dropping it
+  // would flash a "Loading..." box that never explains itself.
+  if (DAILY_PERIODS.has(period)) return null;
 
   const cfg = VIEW_CONFIG[viewMode];
   const hasData = data.some((d) => (d[cfg.dataKey] || 0) > 0);

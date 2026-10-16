@@ -52,7 +52,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
   const openedRef = useRef(false);
   // Proxy-flow session ledger: which provider's proxy THIS modal session
   // started, and whether its stop was already sent. Every stop-proxy call is
-  // gated on this — parent re-renders can never spam it, and a close stops
+  // gated on this - parent re-renders can never spam it, and a close stops
   // the owned proxy exactly once.
   const flowRef = useRef({ proxyStarted: false, proxyProvider: null, stopSent: false });
   // Parent callbacks are stored in refs so effect/callback identities stay
@@ -171,7 +171,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
           return;
         }
 
-        if (data.error === "expired_token" || data.error === "access_denied") {
+        if (data.error === "expired_token" || data.error === "access_denied" || data.fatal) {
           throw new Error(data.errorDescription || data.error);
         }
 
@@ -268,7 +268,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
     try {
       setError(null);
 
-      // Trae/Windsurf: proxy OAuth (browser mode) — handled by dedicated flow.
+      // Trae/Windsurf: proxy OAuth (browser mode) - handled by dedicated flow.
       // Paste-token mode is handled by handleManualSubmit (no /authorize call).
       if (PROXY_OAUTH_PROVIDERS.has(provider) && authMode === "browser") {
         await startProxyFlow(provider);
@@ -287,6 +287,11 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
         "qoder",
         "qoder-cn",
         "grok-cli",
+        "muse",
+        "glm",
+        "minimax-code",
+        "minimax-code-global",
+        "nous",
       ];
       if (deviceCodeProviders.includes(provider)) {
         setIsDeviceCode(true);
@@ -311,7 +316,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
         if (verifyUrl) window.open(verifyUrl, "_blank", "noopener,noreferrer");
 
         // Pass extraData for Kiro (contains _clientId, _clientSecret) and
-        // Qoder (contains _qoderMachineId / _qoderNonce — needed so mapTokens
+        // Qoder (contains _qoderMachineId / _qoderNonce - needed so mapTokens
         // can persist the machine id alongside the token).
         const extraData = provider === "kiro"
           ? {
@@ -329,9 +334,15 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
             }
           : (provider === "kimi" || provider === "kimi-coding")
           ? { _kimiDeviceId: data._kimiDeviceId }
+          : provider === "glm"
+          ? { _zcodePollToken: data._zcodePollToken }
+          : (provider === "minimax-code" || provider === "minimax-code-global")
+          ? { _minimaxPollByUser: data._minimaxPollByUser }
           : null;
         startPolling(
-          data.device_code,
+          // MiniMax's device-code variant returns no device_code: the token
+          // endpoint is polled with the user_code itself.
+          data.device_code || data.user_code,
           data.codeVerifier,
           data.interval || 5,
           extraData,
@@ -471,7 +482,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
     startOAuthFlowRef.current = startOAuthFlow;
   });
 
-  // Reset state and start OAuth when modal opens — exactly once per open.
+  // Reset state and start OAuth when modal opens - exactly once per open.
   // Guarded by openedRef so StrictMode/effect re-runs never open extra tabs.
   useEffect(() => {
     if (!isOpen || !provider) return;
@@ -687,7 +698,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
         return;
       }
 
-      // Detect raw JWT access token (starts with eyJ) — skip URL parsing
+      // Detect raw JWT access token (starts with eyJ) - skip URL parsing
       if (input.startsWith("eyJ") && input.includes(".")) {
         await exchangeTokens(input, null);
         return;
@@ -732,7 +743,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
 
   // Clear session on modal close + cleanup proxy (idempotent: the owned
   // proxy is stopped at most once across effect-close, button-close, and
-  // Escape/backdrop-close — all funnel through here or the close effect).
+  // Escape/backdrop-close - all funnel through here or the close effect).
   const handleClose = useCallback(() => {
     stopOwnedProxy();
     onCloseRef.current();
@@ -752,25 +763,27 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
   return (
     <Modal isOpen={isOpen} title={modalTitle} onClose={handleClose} size="lg">
       <div className="flex flex-col gap-4">
-        {/* Trae/Windsurf: browser OAuth (proxy) + paste-token fallback */}
+        {/* Proxy OAuth (trae/windsurf/zed): browser flow; paste-token only when configured */}
         {PROXY_OAUTH_PROVIDERS.has(provider) && (step === "waiting" || step === "input" || step === "error") && (
           <>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => { setAuthMode("browser"); setError(null); setStep("waiting"); startOAuthFlow(); }}
-                className={`flex-1 rounded-lg border px-3 py-2 text-sm transition-colors ${authMode === "browser" ? "border-primary bg-primary/10 text-primary" : "border-border text-text-muted hover:text-primary"}`}
-              >
-                🌐 Sign in with browser
-              </button>
-              <button
-                type="button"
-                onClick={() => { setAuthMode("paste-token"); setError(null); setStep("input"); }}
-                className={`flex-1 rounded-lg border px-3 py-2 text-sm transition-colors ${authMode === "paste-token" ? "border-primary bg-primary/10 text-primary" : "border-border text-text-muted hover:text-primary"}`}
-              >
-                🔑 Paste token
-              </button>
-            </div>
+            {PASTE_TOKEN_PROVIDERS[provider] && (
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => { setAuthMode("browser"); setError(null); setStep("waiting"); startOAuthFlow(); }}
+                  className={`flex-1 rounded-lg border px-3 py-2 text-sm transition-colors ${authMode === "browser" ? "border-primary bg-primary/10 text-primary" : "border-border text-text-muted hover:text-primary"}`}
+                >
+                  🌐 Sign in with browser
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setAuthMode("paste-token"); setError(null); setStep("input"); }}
+                  className={`flex-1 rounded-lg border px-3 py-2 text-sm transition-colors ${authMode === "paste-token" ? "border-primary bg-primary/10 text-primary" : "border-border text-text-muted hover:text-primary"}`}
+                >
+                  🔑 Paste token
+                </button>
+              </div>
+            )}
 
             {authMode === "browser" && (
               <>
@@ -800,7 +813,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
               </>
             )}
 
-            {authMode === "paste-token" && (
+            {authMode === "paste-token" && PASTE_TOKEN_PROVIDERS[provider] && (
               <div className="space-y-3">
                 {ideStatus && !ideStatus.installed && (
                   <div className={`px-3 py-2 rounded-lg text-sm ${PASTE_TOKEN_PROVIDERS[provider].ideOptional ? "bg-blue-500/10 text-blue-700 dark:text-blue-300" : "bg-yellow-500/10 text-yellow-700 dark:text-yellow-300"}`}>
@@ -920,18 +933,20 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
                   </Button>
                 </div>
               </div>
-              <div className="bg-primary/10 p-4 rounded-lg">
-                <p className="text-xs text-text-muted mb-1">Your Code</p>
-                <div className="flex items-center justify-center gap-2">
-                  <p className="text-2xl font-mono font-bold text-primary">{deviceData.user_code}</p>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    icon={copied === "user_code" ? "check" : "content_copy"}
-                    onClick={() => copy(deviceData.user_code, "user_code")}
-                  />
+              {deviceData.user_code && (
+                <div className="bg-primary/10 p-4 rounded-lg">
+                  <p className="text-xs text-text-muted mb-1">Your Code</p>
+                  <div className="flex items-center justify-center gap-2">
+                    <p className="text-2xl font-mono font-bold text-primary">{deviceData.user_code}</p>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      icon={copied === "user_code" ? "check" : "content_copy"}
+                      onClick={() => copy(deviceData.user_code, "user_code")}
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
             {polling && (
               <div className="flex items-center justify-center gap-2 text-sm text-text-muted">

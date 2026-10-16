@@ -1,6 +1,6 @@
 // Tool-call rescue: recover a call the client would otherwise reject.
 //
-// Two faults arrive from the same place — a model that produced a tool call
+// Two faults arrive from the same place - a model that produced a tool call
 // it did not quite finish, or spelled a name it half-remembers:
 //
 //   "Invalid args for tool \"Bash\": must have required property 'command'"
@@ -90,7 +90,7 @@ function parseJson(value) {
 }
 
 /**
- * indexDeclaredTools(tools) — declared name lookup, case-insensitive.
+ * indexDeclaredTools(tools) - declared name lookup, case-insensitive.
  * Also exposes the schema so a single pass serves both name resolution and the
  * required-property check.
  */
@@ -131,7 +131,7 @@ function recoverRequired(key, args, schema, bareString) {
   for (const candidate of candidates) {
     // Skip only the literal key. Its own spelling variants normalize to the same
     // string as the key, so testing the normalized form here would discard
-    // `newString` when the key is `new_string` — which is exactly the case this
+    // `newString` when the key is `new_string` - which is exactly the case this
     // lookup exists to catch.
     if (candidate === key) continue;
     const match = byNormalized.get(normalizeKey(candidate));
@@ -154,7 +154,7 @@ function recoverRequired(key, args, schema, bareString) {
 }
 
 /**
- * rescueToolCall(call, index) — one call in, one decision out.
+ * rescueToolCall(call, index) - one call in, one decision out.
  *
  * @param {object} call        `{ id, function: { name, arguments } }` or the
  *                             flat `{ name, arguments }` the Claude and
@@ -162,7 +162,7 @@ function recoverRequired(key, args, schema, bareString) {
  * @param {Map} index          from indexDeclaredTools
  * @returns {{call: object|null, renamed: boolean, recovered: number, unresolved: string[]}}
  *   `call` null means the arguments could not be recovered and the caller must
- *   drop it — sending it produces the exact error this module exists to stop.
+ *   drop it - sending it produces the exact error this module exists to stop.
  */
 export function rescueToolCall(call, index) {
   const out = { call: call ?? null, renamed: false, recovered: 0, unresolved: [] };
@@ -253,7 +253,7 @@ function mergeStats(target, stats) {
 }
 
 /**
- * rescueResponse(payload, tools) — walk every tool-call shape a client can be
+ * rescueResponse(payload, tools) - walk every tool-call shape a client can be
  * handed, in one call. An assistant turn left with no content and no calls
  * still gets its finish_reason corrected, so a dropped call cannot leave the
  * client waiting on a turn that will never come.
@@ -317,7 +317,7 @@ export function rescueResponse(payload, tools) {
 }
 
 /**
- * rescueStreamedNames(chunk, index) — raise a streamed tool-call name back to
+ * rescueStreamedNames(chunk, index) - raise a streamed tool-call name back to
  * the case the request declared, and nothing else.
  *
  * A name arrives whole in the first delta of a call, so fixing it costs nothing
@@ -325,7 +325,7 @@ export function rescueResponse(payload, tools) {
  * and only form a parseable object at the end, so this deliberately does not
  * touch them. A streamed call whose arguments cannot be recovered is repaired on
  * the following turn by rescueRequest, which reads the history the client sends
- * back — too late to save this turn, but enough to stop it repeating forever.
+ * back - too late to save this turn, but enough to stop it repeating forever.
  *
  * A `name` is only rewritten when it matches a declared tool under a
  * case-folding comparison and differs exactly, so nothing outside a tool call
@@ -409,7 +409,7 @@ function rescueClaudeBlocks(message, index) {
 }
 
 /**
- * rescueRequest(body) — the same rules over the request history.
+ * rescueRequest(body) - the same rules over the request history.
  *
  * This is the half that makes the fix stick. A call the client rejected stays
  * in the history the client sends back on the next turn, so without this the

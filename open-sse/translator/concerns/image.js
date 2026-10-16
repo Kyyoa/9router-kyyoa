@@ -56,7 +56,7 @@ function detectImageMime(buf) {
       if (buf[offset + i] !== sig[i]) { match = false; break; }
     }
     if (!match) continue;
-    // WEBP: RIFF....WEBP — bytes 8..11 must be "WEBP".
+    // WEBP: RIFF....WEBP - bytes 8..11 must be "WEBP".
     if (verifyWebp && !(buf.length >= 12 && buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50)) continue;
     return mime;
   }
@@ -112,7 +112,7 @@ export async function fetchImageAsBase64(imageUrl, options = {}) {
 
     const buf = Buffer.concat(chunks.map((c) => Buffer.from(c)));
     const mimeType = detectImageMime(buf);
-    if (!mimeType) return null; // not a recognized image — reject disguised payloads
+    if (!mimeType) return null; // not a recognized image - reject disguised payloads
 
     return { url: `data:${mimeType};base64,${buf.toString("base64")}`, mimeType };
   } catch {

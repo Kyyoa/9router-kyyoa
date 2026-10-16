@@ -109,6 +109,9 @@ export default function RequestDetailsTab() {
   });
   const [loading, setLoading] = useState(false);
   const [selectedDetail, setSelectedDetail] = useState(null);
+  // Set when the per-record full payload could not be loaded (key session), so
+  // the drawer can say why instead of showing a redacted body silently.
+  const [fullBodyError, setFullBodyError] = useState("");
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [providers, setProviders] = useState([]);
   const [providerNameCache, setProviderNameCache] = useState(null);
@@ -162,9 +165,28 @@ export default function RequestDetailsTab() {
     fetchDetails();
   }, [fetchDetails]);
 
-  const handleViewDetail = (detail) => {
+  const handleViewDetail = async (detail) => {
     setSelectedDetail(detail);
+    setFullBodyError("");
     setIsDrawerOpen(true);
+
+    // The listing redacts conversation bodies; the full payload comes from an
+    // admin-only per-record endpoint and is merged over the row once it lands.
+    const id = detail?.id;
+    if (!id) return;
+    try {
+      const res = await fetch(`/api/usage/request-details/${encodeURIComponent(id)}`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setFullBodyError(data.error || "Full request body is not available for this session");
+        return;
+      }
+      if (data.detail) {
+        setSelectedDetail((prev) => (prev && prev.id === id ? { ...prev, ...data.detail } : prev));
+      }
+    } catch (err) {
+      setFullBodyError(err.message || "Failed to load the full request body");
+    }
   };
 
   const handlePageChange = (newPage) => {
@@ -307,10 +329,10 @@ export default function RequestDetailsTab() {
                       {getInputTokens(detail.tokens).toLocaleString()}
                     </td>
                     <td className="p-4 text-sm text-text-main text-right font-mono">
-                      {getCachedTokens(detail.tokens) > 0 ? getCachedTokens(detail.tokens).toLocaleString() : "—"}
+                      {getCachedTokens(detail.tokens) > 0 ? getCachedTokens(detail.tokens).toLocaleString() : "-"}
                     </td>
                     <td className="p-4 text-sm text-text-main text-right font-mono">
-                      {getCacheCreationTokens(detail.tokens) > 0 ? getCacheCreationTokens(detail.tokens).toLocaleString() : "—"}
+                      {getCacheCreationTokens(detail.tokens) > 0 ? getCacheCreationTokens(detail.tokens).toLocaleString() : "-"}
                     </td>
                     <td className="p-4 text-sm text-text-main text-right font-mono">
                       {detail.tokens?.completion_tokens?.toLocaleString() || 0}
@@ -358,6 +380,12 @@ export default function RequestDetailsTab() {
       >
         {selectedDetail && (
           <div className="space-y-6">
+            {fullBodyError && (
+              <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-600 dark:text-amber-400">
+                <span className="material-symbols-outlined text-[16px]">info</span>
+                <span>{fullBodyError}</span>
+              </div>
+            )}
             <div className="grid min-w-0 grid-cols-1 gap-4 text-sm sm:grid-cols-2">
               <div>
                 <span className="text-text-muted">ID:</span>{" "}
@@ -460,7 +488,7 @@ export default function RequestDetailsTab() {
                 ) : (
                   <p className="text-sm text-text-muted">
                     Reason: <span className="font-mono">{selectedDetail.pxpipe.reason}</span>
-                    {selectedDetail.pxpipe.detail ? ` — ${selectedDetail.pxpipe.detail}` : ""}
+                    {selectedDetail.pxpipe.detail ? ` - ${selectedDetail.pxpipe.detail}` : ""}
                   </p>
                 )}
               </div>

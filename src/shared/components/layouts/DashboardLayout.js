@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { useNotificationStore } from "@/store/notificationStore";
 import Sidebar from "../Sidebar";
 import Header from "../Header";
 import WelcomeModal from "../WelcomeModal";
+import UpdateBanner from "../UpdateBanner";
+import TaskDock from "../TaskDock";
 
 function getToastStyle(type) {
   if (type === "success") {
@@ -37,6 +39,24 @@ export default function DashboardLayout({ children }) {
   const pathname = usePathname();
   const notifications = useNotificationStore((state) => state.notifications);
   const removeNotification = useNotificationStore((state) => state.removeNotification);
+
+  // Preload heavy usage charts in background when browser is idle
+  useEffect(() => {
+    const preload = () => {
+      import("@/shared/components/UsageStats").catch(() => {});
+      import("@/app/(dashboard)/dashboard/usage/components/UsageChart").catch(() => {});
+      import("@/app/(dashboard)/dashboard/usage/components/ProviderBarChart").catch(() => {});
+      import("@/app/(dashboard)/dashboard/usage/components/TopModelsChart").catch(() => {});
+    };
+    if (typeof window !== "undefined") {
+      if ("requestIdleCallback" in window) {
+        const id = window.requestIdleCallback(preload, { timeout: 4000 });
+        return () => window.cancelIdleCallback(id);
+      }
+      const timer = setTimeout(preload, 2500);
+      return () => clearTimeout(timer);
+    }
+  }, []);
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-bg">
@@ -74,7 +94,7 @@ export default function DashboardLayout({ children }) {
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/20 lg:hidden"
+          className="fixed inset-0 z-40 bg-scrim/40 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
@@ -98,8 +118,15 @@ export default function DashboardLayout({ children }) {
         {/* Faint grid background */}
         <div className="landing-grid absolute inset-0 pointer-events-none -z-10" aria-hidden="true" />
         <Header key={pathname} onMenuClick={() => setSidebarOpen(true)} />
+        <TaskDock />
         <div className={`flex-1 overflow-y-auto custom-scrollbar ${pathname === "/dashboard/basic-chat" ? "" : "p-6 lg:p-10"} ${pathname === "/dashboard/basic-chat" ? "flex flex-col overflow-hidden" : ""}`}>
-          <div className={`${pathname === "/dashboard/basic-chat" ? "flex-1 w-full h-full flex flex-col" : "max-w-7xl mx-auto"}`}>{children}</div>
+          <div className={`${pathname === "/dashboard/basic-chat" ? "flex-1 w-full h-full flex flex-col" : "max-w-7xl mx-auto"}`}>
+            {/* Banner lives inside the scroll container: it scrolls with the page
+                and inherits this page's padding, instead of floating above it.
+                Hidden in fullscreen chat, where a full-width block breaks flow. */}
+            {pathname === "/dashboard/basic-chat" ? null : <UpdateBanner />}
+            {children}
+          </div>
         </div>
       </main>
     </div>

@@ -27,8 +27,8 @@ export function gitLog(text, maxLines = GIT_LOG_MAX_LINES) {
     const line = raw.trimEnd();
     const trimmed = line.trim();
 
-    // commit <sha> header — starts new commit entry
-    // Also matched with leading graph decoration (`*   commit abc1234...` — --graph without --oneline)
+    // commit <sha> header - starts new commit entry
+    // Also matched with leading graph decoration (`*   commit abc1234...` - --graph without --oneline)
     if (/^commit [0-9a-f]{7,40}$/i.test(trimmed) || /^[*|/\\ ]+commit [0-9a-f]{7,40}/i.test(trimmed)) {
       inCommit = true;
       subjectSeen = false;
@@ -37,14 +37,14 @@ export function gitLog(text, maxLines = GIT_LOG_MAX_LINES) {
     }
 
     if (inCommit) {
-      // Author / Date — keep as-is (already column 0 in raw, or graph-prefix stripped by commit-header match)
+      // Author / Date - keep as-is (already column 0 in raw, or graph-prefix stripped by commit-header match)
       if (/^[*|/\\ ]*(Author|Date):/i.test(trimmed)) {
         pushLine(trimmed);
         continue;
       }
-      // blank — skip
+      // blank - skip
       if (trimmed === "") continue;
-      // indented subject (4 spaces, optionally preceded by graph decoration) — first one is subject
+      // indented subject (4 spaces, optionally preceded by graph decoration) - first one is subject
       if (!subjectSeen && /^[*|/\\ ]*    \S/.test(line)) {
         pushLine("  Subject: " + trimmed);
         subjectSeen = true;
@@ -55,12 +55,12 @@ export function gitLog(text, maxLines = GIT_LOG_MAX_LINES) {
         pushLine("  " + trimmed);
         continue;
       }
-      // embedded diff header — one-line marker
+      // embedded diff header - one-line marker
       if (/^diff --git /.test(trimmed)) {
         pushLine("  ... diff body omitted");
         continue;
       }
-      // everything else in commit body — drop
+      // everything else in commit body - drop
       continue;
     }
 
@@ -79,7 +79,7 @@ export function gitLog(text, maxLines = GIT_LOG_MAX_LINES) {
       continue;
     }
 
-    // Pure graph decoration (no sha) — drop
+    // Pure graph decoration (no sha) - drop
     if (/^[*|/\\ ]+$/.test(trimmed) && /[*|/\\]/.test(trimmed)) {
       continue;
     }

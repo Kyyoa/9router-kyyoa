@@ -26,7 +26,7 @@ const RE_LS_ROW = /^[-dlbcps][rwx-]{9}/m;
 const RE_LS_TOTAL = /^total \d+$/m;
 
 export function autoDetectFilter(text) {
-  // Rust: floor_char_boundary to avoid UTF-8 split — JS .slice() by char is safe
+  // Rust: floor_char_boundary to avoid UTF-8 split - JS .slice() by char is safe
   const head = text.length > DETECT_WINDOW ? text.slice(0, DETECT_WINDOW) : text;
 
   if (RE_GIT_LOG.test(head)) return gitLog;
@@ -57,7 +57,7 @@ export function autoDetectFilter(text) {
   // Cursor Glob search list header
   if (SEARCH_LIST_HEADER_RE.test(head)) return searchList;
 
-  // Line-numbered file dump ("  N|content") — fire only if many lines match
+  // Line-numbered file dump ("  N|content") - fire only if many lines match
   if (lines.length >= SMART_TRUNCATE_MIN_LINES && isLineNumbered(lines)) {
     return readNumbered;
   }
@@ -65,7 +65,7 @@ export function autoDetectFilter(text) {
   // Fallback: dedupLog for generic multi-line noise with duplicates
   if (nonEmpty.length >= 5) return dedupLog;
 
-  // Last resort: big blob with no structure — smart truncate
+  // Last resort: big blob with no structure - smart truncate
   if (text.split("\n").length >= SMART_TRUNCATE_MIN_LINES) return smartTruncate;
 
   return null;

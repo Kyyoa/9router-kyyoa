@@ -7,7 +7,7 @@
 //   ~ Modified: N files
 //   ? Untracked: N files
 //   conflicts: N files
-//   clean — nothing to commit
+//   clean - nothing to commit
 import { STATUS_MAX_FILES, STATUS_MAX_UNTRACKED } from "../constants.js";
 
 export function gitStatus(input) {
@@ -72,7 +72,7 @@ export function gitStatus(input) {
       continue;
     }
 
-    // "Untracked files:" section — gather bare paths after this marker
+    // "Untracked files:" section - gather bare paths after this marker
     // Handled implicitly: plain paths without markers are skipped (safer).
   }
 
@@ -108,7 +108,7 @@ export function gitStatus(input) {
   }
 
   if (staged === 0 && modified === 0 && untracked === 0 && conflicts === 0) {
-    out += "clean — nothing to commit\n";
+    out += "clean - nothing to commit\n";
   }
 
   return out.replace(/\n+$/, "");

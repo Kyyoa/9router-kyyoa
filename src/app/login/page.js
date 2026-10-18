@@ -291,41 +291,6 @@ export default function LoginPage() {
 
                 {passwordAvailable && (
                   <>
-                    {/* Kyyoa Mode Segment Switch */}
-                    <div className="grid grid-cols-2 p-1 bg-surface-2 rounded-xl border border-border/50">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowKeyLogin(false);
-                          setError("");
-                        }}
-                        className={`flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium rounded-lg transition-all ${
-                          !showKeyLogin
-                            ? "bg-surface text-text-main shadow-sm border border-border/60 font-semibold"
-                            : "text-text-muted hover:text-text-main"
-                        }`}
-                      >
-                        <span className="material-symbols-outlined text-[15px]">lock</span>
-                        <span>Password</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowKeyLogin(true);
-                          setError("");
-                        }}
-                        className={`flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium rounded-lg transition-all ${
-                          showKeyLogin
-                            ? "bg-surface text-text-main shadow-sm border border-border/60 font-semibold"
-                            : "text-text-muted hover:text-text-main"
-                        }`}
-                      >
-                        <span className="material-symbols-outlined text-[15px]">key</span>
-                        <span>API Key</span>
-                      </button>
-                    </div>
-
                     {showKeyLogin ? (
                       /* API Key Login Form */
                       <form onSubmit={handleLogin} className="flex flex-col gap-4">
@@ -358,7 +323,7 @@ export default function LoginPage() {
                           </div>
                           {error && <p className="text-xs text-danger mt-1">{error}</p>}
                           <p className="text-[11px] text-text-muted leading-relaxed">
-                            Sign in with an assigned key to access authorized tools and models.
+                            Sign in using an assigned API key to access authorized features.
                           </p>
                         </div>
 
@@ -369,8 +334,20 @@ export default function LoginPage() {
                           loading={loading}
                           disabled={retryAfter > 0 || !apiKey.trim()}
                         >
-                          {retryAfter > 0 ? `Wait ${retryAfter}s` : "Authenticate Key"}
+                          {retryAfter > 0 ? `Wait ${retryAfter}s` : "Login with API Key"}
                         </Button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowKeyLogin(false);
+                            setError("");
+                          }}
+                          className="flex items-center justify-center gap-1.5 text-xs text-text-muted hover:text-text-main transition-all cursor-pointer py-1.5 px-3 rounded-lg hover:bg-surface-2 border border-transparent hover:border-border/40 mt-1"
+                        >
+                          <span className="material-symbols-outlined text-[15px]">lock</span>
+                          <span>Back to password login</span>
+                        </button>
                       </form>
                     ) : (
                       /* Password Login Form */
@@ -441,15 +418,27 @@ export default function LoginPage() {
                           loading={loading}
                           disabled={retryAfter > 0 || !password}
                         >
-                          {retryAfter > 0 ? `Wait ${retryAfter}s` : "Sign In"}
+                          {retryAfter > 0 ? `Wait ${retryAfter}s` : "Login"}
                         </Button>
 
                         <div className="flex items-center justify-center gap-1.5 text-[11px] text-text-muted pt-1">
-                          <span>Default password:</span>
+                          <span>Default password is</span>
                           <code className="font-mono text-text-main bg-surface-2 px-1.5 py-0.5 rounded text-[10px] border border-border/40">
                             kyyoa123
                           </code>
                         </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowKeyLogin(true);
+                            setError("");
+                          }}
+                          className="flex items-center justify-center gap-1.5 text-xs text-text-muted hover:text-primary transition-all cursor-pointer py-1.5 px-3 rounded-lg hover:bg-surface-2 border border-transparent hover:border-border/40 mt-1"
+                        >
+                          <span className="material-symbols-outlined text-[15px] text-primary/80">key</span>
+                          <span>Have an API key? Sign in with it</span>
+                        </button>
                       </form>
                     )}
                   </>

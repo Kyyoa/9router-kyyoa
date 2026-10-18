@@ -5,6 +5,7 @@ import { Card, Button, Input } from "@/shared/components";
 
 export default function LoginPage() {
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [resetHint, setResetHint] = useState("");
   const [retryAfter, setRetryAfter] = useState(0);
@@ -18,8 +19,10 @@ export default function LoginPage() {
   const [samlLoginLabel, setSamlLoginLabel] = useState("Sign in with SAML SSO");
   const [mustChange, setMustChange] = useState(false);
   const [newPassword, setNewPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
   const [showKeyLogin, setShowKeyLogin] = useState(false);
   const [apiKey, setApiKey] = useState("");
+  const [showApiKey, setShowApiKey] = useState(false);
   const [noAccess, setNoAccess] = useState(false);
 
   // A key that signed in but holds no permission would bounce between /login and
@@ -72,10 +75,9 @@ export default function LoginPage() {
           setSamlConfigured(data.samlConfigured === true);
           setSamlLoginLabel(data.samlLoginLabel || "Sign in with SAML SSO");
         } else {
-          // Safe fallback on non-OK response to avoid infinite loading state.
           setHasPassword(true);
         }
-      } catch (err) {
+      } catch {
         clearTimeout(timeoutId);
         setHasPassword(true);
       }
@@ -90,7 +92,7 @@ export default function LoginPage() {
     setResetHint("");
 
     try {
-      const payload = showKeyLogin ? { apiKey } : { password };
+      const payload = showKeyLogin ? { apiKey: apiKey.trim() } : { password };
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -118,14 +120,13 @@ export default function LoginPage() {
         if (data.resetHint) setResetHint(data.resetHint);
         if (data.retryAfter) setRetryAfter(Number(data.retryAfter));
       }
-    } catch (err) {
+    } catch {
       setError("An error occurred. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
-  // Force a new password before entering the dashboard (default + remote).
   const handleSetNewPassword = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -145,7 +146,7 @@ export default function LoginPage() {
         const data = await res.json();
         setError(data.error || "Failed to set password");
       }
-    } catch (err) {
+    } catch {
       setError("An error occurred. Please try again.");
     } finally {
       setLoading(false);
@@ -162,11 +163,9 @@ export default function LoginPage() {
 
   const isSsoEnabled = ["sso", "oidc", "saml", "both"].includes(authMode);
   const activeSsoType = ssoType || (authMode === "saml" ? "saml" : "oidc");
-
   const samlAvailable = isSsoEnabled && activeSsoType === "saml" && samlConfigured;
   const oidcAvailable = isSsoEnabled && activeSsoType === "oidc" && oidcConfigured;
   const ssoAvailable = samlAvailable || oidcAvailable;
-
   const passwordAvailable = authMode === "password" || authMode === "both" || !ssoAvailable;
 
   // Show loading state while checking password
@@ -175,184 +174,303 @@ export default function LoginPage() {
       <div className="min-h-screen flex items-center justify-center bg-bg p-4">
         <div className="text-center">
           <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-          <p className="text-text-muted mt-4">Loading...</p>
+          <p className="text-text-muted mt-4 font-mono text-xs">Connecting to 9Router...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-bg p-4 relative overflow-hidden">
-      {/* Faint grid background */}
-      <div className="landing-grid absolute inset-0 pointer-events-none" aria-hidden="true" />
-      <div className="relative z-10 w-full max-w-md">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-primary mb-2">9Router</h1>
-          <p className="text-text-muted">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-bg p-4 relative overflow-hidden select-none">
+      {/* Background ambient lighting */}
+      <div className="landing-grid absolute inset-0 pointer-events-none opacity-40" aria-hidden="true" />
+      <div
+        className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[520px] h-[360px] bg-gradient-to-tr from-emerald-500/10 via-primary/15 to-cyan-500/10 blur-[100px] rounded-full pointer-events-none"
+        aria-hidden="true"
+      />
+
+      <div className="relative z-10 w-full max-w-[420px]">
+        {/* Brand Header */}
+        <div className="text-center mb-6">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-surface to-surface-2 border border-border/80 shadow-lg shadow-black/20 mb-3.5 relative group">
+            <div className="absolute inset-0 rounded-2xl bg-primary/10 blur-sm group-hover:bg-primary/20 transition-colors" />
+            <span className="material-symbols-outlined text-[28px] text-primary relative z-10">
+              hub
+            </span>
+          </div>
+
+          <div className="flex items-center justify-center gap-2 mb-1.5">
+            <h1 className="text-2xl font-bold tracking-tight text-text-main font-mono">
+              9Router
+            </h1>
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold uppercase tracking-wider bg-primary/10 text-primary border border-primary/25">
+              Kyyoa
+            </span>
+          </div>
+
+          <p className="text-xs text-text-muted">
             {noAccess
-              ? "This API key is signed in but holds no dashboard permission"
-              : samlAvailable
-              ? "Sign in with SAML 2.0 Single Sign-On"
-              : oidcAvailable
-              ? "Sign in with your OIDC provider to access the dashboard"
+              ? "This API key holds no dashboard permissions"
               : showKeyLogin
-              ? "Enter your API key to access authorised features"
-              : "Enter your password to access the dashboard"}
+              ? "Sign in with your assigned API Key credentials"
+              : "Sign in to access your autonomous AI router"}
           </p>
         </div>
 
-        <Card>
-          {noAccess ? (
-            <div className="flex flex-col gap-4">
-              <p className="text-sm text-text-muted text-center">
-                Ask the owner of this instance to grant a permission on the key, or sign in with the dashboard password instead.
-              </p>
-              <Button type="button" variant="primary" className="w-full" loading={loading} onClick={handleSignOut}>
-                Sign out
-              </Button>
-            </div>
-          ) : mustChange ? (
-            <form onSubmit={handleSetNewPassword} className="flex flex-col gap-4">
-              <p className="text-sm text-amber-600 dark:text-amber-400 text-center">
-                Set a new password before accessing the dashboard remotely.
-              </p>
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium">New password</label>
-                <Input
-                  type="password"
-                  placeholder="Enter new password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  required
-                  autoFocus
-                />
-                {error && <p className="text-xs text-red-500">{error}</p>}
+        {/* Main Login Card */}
+        <div className="relative">
+          <Card className="p-6 sm:p-7 shadow-2xl shadow-black/30 border border-border/70 backdrop-blur-xl bg-card/95">
+            {noAccess ? (
+              <div className="flex flex-col gap-4 text-center">
+                <div className="p-3 rounded-xl bg-danger/10 border border-danger/20 text-danger text-xs">
+                  Ask the owner of this instance to grant dashboard permissions for your key.
+                </div>
+                <Button type="button" variant="primary" className="w-full" loading={loading} onClick={handleSignOut}>
+                  Sign out
+                </Button>
               </div>
-              <Button type="submit" variant="primary" className="w-full" loading={loading} disabled={!newPassword}>
-                Set password
-              </Button>
-            </form>
-          ) : (
-          <div className="flex flex-col gap-4">
-            {samlAvailable && (
-              <Button type="button" variant="primary" className="w-full" onClick={handleSamlLogin}>
-                {samlLoginLabel}
-              </Button>
-            )}
-
-            {oidcAvailable && (
-              <Button type="button" variant="primary" className="w-full" onClick={handleOidcLogin}>
-                {oidcLoginLabel}
-              </Button>
-            )}
-
-            {ssoAvailable && passwordAvailable && <div className="h-px bg-border/60" />}
-
-            {passwordAvailable ? (
-              showKeyLogin ? (
-              <form onSubmit={handleLogin} className="flex flex-col gap-4">
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm font-medium">API Key</label>
-                  <Input
-                    type="password"
-                    placeholder="Enter your API key (sk-...)"
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    required
-                    autoFocus
-                  />
-                  {error && <p className="text-xs text-red-500">{error}</p>}
-                  <p className="text-xs text-text-muted">
-                    Log in using an assigned API key to access authorised features.
-                  </p>
+            ) : mustChange ? (
+              <form onSubmit={handleSetNewPassword} className="flex flex-col gap-4">
+                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-500 text-xs text-center">
+                  Set a new password before accessing the dashboard remotely.
                 </div>
-
-                <Button
-                  type="submit"
-                  variant="primary"
-                  className="w-full"
-                  loading={loading}
-                  disabled={retryAfter > 0 || !apiKey}
-                >
-                  {retryAfter > 0 ? `Wait ${retryAfter}s` : "Login with API Key"}
-                </Button>
-
-                <button
-                  type="button"
-                  onClick={() => { setShowKeyLogin(false); setError(""); }}
-                  className="flex items-center justify-center gap-1.5 text-xs text-text-muted hover:text-text-main transition-colors cursor-pointer"
-                >
-                  <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>lock</span>
-                  Back to password login
-                </button>
-              </form>
-              ) : (
-              <form onSubmit={handleLogin} className="flex flex-col gap-4">
-                {isSsoEnabled && !ssoAvailable && (
-                  <p className="text-xs text-amber-600 dark:text-amber-400 text-center">
-                    {activeSsoType === "saml" ? "SAML SSO" : "OIDC"} login is enabled, but configuration is incomplete. Password login is still available for recovery.
-                  </p>
-                )}
-
-                {authMode === "both" && ssoAvailable && (
-                  <p className="text-xs text-text-muted text-center">
-                    Password and {activeSsoType === "saml" ? "SAML SSO" : "OIDC"} login are both enabled.
-                  </p>
-                )}
-
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm font-medium">Password</label>
-                  <Input
-                    type="password"
-                    placeholder="Enter password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    autoFocus={!oidcAvailable}
-                  />
-                  {error && <p className="text-xs text-red-500">{error}</p>}
-                  {retryAfter > 0 && (
-                    <p className="text-xs text-amber-600 dark:text-amber-400">
-                      Locked. Retry in <span className="font-mono">{retryAfter}s</span>.
-                    </p>
-                  )}
-                  {resetHint && (
-                    <p className="text-xs text-text-muted">
-                      Forgot password? Open <code className="bg-sidebar px-1 rounded">9router</code> CLI on the host → <b>Settings</b> → <b>Reset Password to Default</b>.
-                    </p>
-                  )}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-text-main">New password</label>
+                  <div className="relative">
+                    <Input
+                      type={showNewPassword ? "text" : "password"}
+                      placeholder="Enter new password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      required
+                      autoFocus
+                      icon="lock"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPassword((prev) => !prev)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-main transition-colors"
+                      tabIndex={-1}
+                    >
+                      <span className="material-symbols-outlined text-[18px]">
+                        {showNewPassword ? "visibility_off" : "visibility"}
+                      </span>
+                    </button>
+                  </div>
+                  {error && <p className="text-xs text-danger mt-1">{error}</p>}
                 </div>
-
-                <Button
-                  type="submit"
-                  variant="primary"
-                  className="w-full"
-                  loading={loading}
-                  disabled={retryAfter > 0}
-                >
-                  {retryAfter > 0 ? `Wait ${retryAfter}s` : "Login"}
+                <Button type="submit" variant="primary" className="w-full" loading={loading} disabled={!newPassword}>
+                  Set password
                 </Button>
-
-                <p className="text-xs text-center text-text-muted mt-2">
-                  Default password is <code className="bg-sidebar px-1 rounded">kyyoa123</code>
-                </p>
-
-                <button
-                  type="button"
-                  onClick={() => { setShowKeyLogin(true); setError(""); }}
-                  className="flex items-center justify-center gap-1.5 text-xs text-text-muted hover:text-text-main transition-colors cursor-pointer"
-                >
-                  <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>key</span>
-                  Have an API key? Sign in with it
-                </button>
               </form>
-              )
             ) : (
-              error && <p className="text-xs text-red-500">{error}</p>
+              <div className="flex flex-col gap-4">
+                {/* SSO Buttons if enabled */}
+                {samlAvailable && (
+                  <Button type="button" variant="primary" className="w-full" onClick={handleSamlLogin}>
+                    {samlLoginLabel}
+                  </Button>
+                )}
+
+                {oidcAvailable && (
+                  <Button type="button" variant="primary" className="w-full" onClick={handleOidcLogin}>
+                    {oidcLoginLabel}
+                  </Button>
+                )}
+
+                {ssoAvailable && passwordAvailable && (
+                  <div className="relative my-1">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-border/60" />
+                    </div>
+                    <div className="relative flex justify-center text-[10px] uppercase tracking-wider">
+                      <span className="bg-card px-2 text-text-muted">or continue with</span>
+                    </div>
+                  </div>
+                )}
+
+                {passwordAvailable && (
+                  <>
+                    {/* Kyyoa Mode Segment Switch */}
+                    <div className="grid grid-cols-2 p-1 bg-surface-2 rounded-xl border border-border/50">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowKeyLogin(false);
+                          setError("");
+                        }}
+                        className={`flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium rounded-lg transition-all ${
+                          !showKeyLogin
+                            ? "bg-surface text-text-main shadow-sm border border-border/60 font-semibold"
+                            : "text-text-muted hover:text-text-main"
+                        }`}
+                      >
+                        <span className="material-symbols-outlined text-[15px]">lock</span>
+                        <span>Password</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowKeyLogin(true);
+                          setError("");
+                        }}
+                        className={`flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium rounded-lg transition-all ${
+                          showKeyLogin
+                            ? "bg-surface text-text-main shadow-sm border border-border/60 font-semibold"
+                            : "text-text-muted hover:text-text-main"
+                        }`}
+                      >
+                        <span className="material-symbols-outlined text-[15px]">key</span>
+                        <span>API Key</span>
+                      </button>
+                    </div>
+
+                    {showKeyLogin ? (
+                      /* API Key Login Form */
+                      <form onSubmit={handleLogin} className="flex flex-col gap-4">
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-xs font-medium text-text-main flex items-center justify-between">
+                            <span>API Key</span>
+                            <span className="text-[10px] text-text-muted">sk-...</span>
+                          </label>
+                          <div className="relative">
+                            <Input
+                              type={showApiKey ? "text" : "password"}
+                              placeholder="Paste your 9Router API key"
+                              value={apiKey}
+                              onChange={(e) => setApiKey(e.target.value)}
+                              required
+                              autoFocus
+                              icon="key"
+                              className="font-mono text-xs"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowApiKey((prev) => !prev)}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-main transition-colors"
+                              tabIndex={-1}
+                            >
+                              <span className="material-symbols-outlined text-[18px]">
+                                {showApiKey ? "visibility_off" : "visibility"}
+                              </span>
+                            </button>
+                          </div>
+                          {error && <p className="text-xs text-danger mt-1">{error}</p>}
+                          <p className="text-[11px] text-text-muted leading-relaxed">
+                            Sign in with an assigned key to access authorized tools and models.
+                          </p>
+                        </div>
+
+                        <Button
+                          type="submit"
+                          variant="primary"
+                          className="w-full mt-1"
+                          loading={loading}
+                          disabled={retryAfter > 0 || !apiKey.trim()}
+                        >
+                          {retryAfter > 0 ? `Wait ${retryAfter}s` : "Authenticate Key"}
+                        </Button>
+                      </form>
+                    ) : (
+                      /* Password Login Form */
+                      <form onSubmit={handleLogin} className="flex flex-col gap-4">
+                        {isSsoEnabled && !ssoAvailable && (
+                          <p className="text-xs text-amber-500 text-center">
+                            {activeSsoType === "saml" ? "SAML SSO" : "OIDC"} login is enabled, but configuration is incomplete. Password login is still available.
+                          </p>
+                        )}
+
+                        <div className="flex flex-col gap-1.5">
+                          <div className="flex items-center justify-between">
+                            <label className="text-xs font-medium text-text-main">Password</label>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPassword("kyyoa123");
+                                setError("");
+                              }}
+                              className="text-[10px] font-mono text-primary/80 hover:text-primary transition-colors hover:underline cursor-pointer"
+                              title="Click to fill default password"
+                            >
+                              fill default
+                            </button>
+                          </div>
+
+                          <div className="relative">
+                            <Input
+                              type={showPassword ? "text" : "password"}
+                              placeholder="Enter dashboard password"
+                              value={password}
+                              onChange={(e) => setPassword(e.target.value)}
+                              required
+                              autoFocus={!oidcAvailable}
+                              icon="lock"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowPassword((prev) => !prev)}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-main transition-colors"
+                              tabIndex={-1}
+                            >
+                              <span className="material-symbols-outlined text-[18px]">
+                                {showPassword ? "visibility_off" : "visibility"}
+                              </span>
+                            </button>
+                          </div>
+
+                          {error && <p className="text-xs text-danger mt-1">{error}</p>}
+
+                          {retryAfter > 0 && (
+                            <p className="text-xs text-amber-500 font-mono">
+                              Locked. Retry in {retryAfter}s.
+                            </p>
+                          )}
+
+                          {resetHint && (
+                            <p className="text-[11px] text-text-muted">
+                              Forgot password? Run <code className="bg-surface px-1 py-0.5 rounded text-[10px]">9router</code> CLI → <b>Settings</b> → <b>Reset Password</b>.
+                            </p>
+                          )}
+                        </div>
+
+                        <Button
+                          type="submit"
+                          variant="primary"
+                          className="w-full mt-1"
+                          loading={loading}
+                          disabled={retryAfter > 0 || !password}
+                        >
+                          {retryAfter > 0 ? `Wait ${retryAfter}s` : "Sign In"}
+                        </Button>
+
+                        <div className="flex items-center justify-center gap-1.5 text-[11px] text-text-muted pt-1">
+                          <span>Default password:</span>
+                          <code className="font-mono text-text-main bg-surface-2 px-1.5 py-0.5 rounded text-[10px] border border-border/40">
+                            kyyoa123
+                          </code>
+                        </div>
+                      </form>
+                    )}
+                  </>
+                )}
+              </div>
             )}
-          </div>
-          )}
-        </Card>
+          </Card>
+        </div>
+
+        {/* Footer info */}
+        <div className="text-center mt-6">
+          <a
+            href="https://github.com/Kyyoa/9router-kyyoa"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 text-xs text-text-muted hover:text-primary transition-colors"
+          >
+            <span className="material-symbols-outlined text-[14px]">star</span>
+            <span>Kyyoa · 9router-kyyoa</span>
+          </a>
+        </div>
       </div>
     </div>
   );

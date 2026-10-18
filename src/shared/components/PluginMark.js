@@ -18,6 +18,12 @@
 
 const PLUGIN_MARKS = {
   // Vision: an eye - an almond lens with a solid pupil. "Sees the image."
+  vision: (
+    <>
+      <path d="M3 12s3.6-5.2 9-5.2 9 5.2 9 5.2-3.6 5.2-9 5.2-9-5.2-9-5.2z" />
+      <circle cx="12" cy="12" r="2.7" fill="currentColor" stroke="none" />
+    </>
+  ),
   // Image Vision: viewfinder corners around a hollow lens ring - the frame a
   // picture goes into. The ring is stroked, never filled, so it cannot read
   // as native vision's solid pupil on a model row. (The old mark reused the
@@ -29,9 +35,14 @@ const PLUGIN_MARKS = {
     </>
   ),
   // Reasoning: three concepts joined - a chain of thought drawn as a graph.
-  // Nodes grew from r=2.3 to r=2.6 and the links were re-seated on their
-  // edges; at 14px the old nodes blurred into the links and the graph read
-  // as a triangle doodle.
+  reasoning: (
+    <>
+      <circle cx="6" cy="6.8" r="2.6" />
+      <circle cx="18" cy="6.8" r="2.6" />
+      <circle cx="12" cy="17.4" r="2.6" />
+      <path d="M8.6 6.8h6.8M7.3 9l3.3 6.2M16.7 9l-3.3 6.2" />
+    </>
+  ),
   // Think Deeper: plates narrowing into the page with a chevron driving down
   // through them - depth. (The old equal-width bars read as a hamburger menu
   // with a chevron under it.)

@@ -45,10 +45,6 @@ const FINGERPRINT_TOOL_DEFINITIONS = {
   },
 };
 
-// Backwards-compatible alias: the fork's executors import the canonical
-// definitions under this name (zen builds its own tool list from it).
-export const OPENCODE_CANONICAL_TOOL_DEFINITIONS = FINGERPRINT_TOOL_DEFINITIONS;
-
 // Request body -> names renamed for that request. transformRequest() mutates the
 // same body object that chatCore passed into the executor, so a WeakMap keeps the
 // mapping request-local without putting transport metadata on the wire.

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { getCapabilitiesForModel } from "open-sse/providers/capabilities.js";
+import { ALIAS_TO_ID } from "@/shared/constants/providers";
 
 // Module cache: one /api/models fetch shared by every useModelCaps instance.
 let cache = null; // { byFull, byId } | null
@@ -23,6 +24,17 @@ function buildMaps(models) {
   return { byFull, byId };
 }
 
+// Combo mutations happen on pages that may mount no picker at all, so this
+// both drops the shared map (next mount refetches) and reuses the existing
+// customModelChanged listener to refresh whatever consumer IS mounted right
+// now - the combos page resolves member caps through one.
+export function invalidateModelCaps() {
+  cache = null;
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("customModelChanged"));
+  }
+}
+
 function loadModelCaps() {
   if (cache) return Promise.resolve(cache);
   if (inflight) return inflight;
@@ -42,12 +54,17 @@ function loadModelCaps() {
 }
 
 // Resolve caps from a "provider/model" string or a bare model id.
-function resolveCaps(byFull, byId, key) {
+// The seat prefix is a UI alias (ocg, cmc, …); the capability tables are keyed
+// by provider id (opencode-go, commandcode, …), so map it before the lookup —
+// an unmapped alias falls through to the generic patterns and under-reports
+// (e.g. any *claude*haiku* id reads as 200k regardless of the provider entry).
+export function resolveCaps(byFull, byId, key) {
   if (!key) return null;
   if (byFull[key]) return byFull[key];
   const bare = key.includes("/") ? key.slice(key.indexOf("/") + 1) : key;
   if (byId[bare]) return byId[bare];
-  const provider = key.includes("/") ? key.slice(0, key.indexOf("/")) : null;
+  const alias = key.includes("/") ? key.slice(0, key.indexOf("/")) : null;
+  const provider = alias ? (ALIAS_TO_ID[alias] || alias) : null;
   const c = getCapabilitiesForModel(provider, bare);
   return {
     vision: c.vision,
@@ -72,7 +89,7 @@ export function useModelCaps() {
     } else {
       loadModelCaps().then(sync);
     }
-    // Custom models change at runtime — drop the shared cache and refetch
+    // Custom models change at runtime - drop the shared cache and refetch
     const invalidate = () => {
       cache = null;
       loadModelCaps().then(sync);
@@ -89,5 +106,13 @@ export function useModelCaps() {
     [byFull, byId],
   );
 
-  return { getCaps };
+  // Combo pills ask only for what the server shipped. An empty combo has no
+  // entry, and the heuristic's 200k default is a fabricated window - better to
+  // render no number at all.
+  const getComboCaps = useCallback(
+    (key) => (key ? byFull[key] || null : null),
+    [byFull],
+  );
+
+  return { getCaps, getComboCaps };
 }

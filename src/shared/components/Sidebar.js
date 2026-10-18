@@ -19,13 +19,14 @@ const COMBINED_WEB_ITEM = { id: "web", label: "Web Fetch & Search", icon: "trave
 const navItems = [
   { href: "/dashboard/endpoint", label: "Endpoint & Key", icon: "api" },
   { href: "/dashboard/providers", label: "Providers", icon: "dns" },
-  // { href: "/dashboard/basic-chat", label: "Basic Chat", icon: "chat" }, // Hidden
   { href: "/dashboard/combos", label: "Combo & Vision Adapter", icon: "layers" },
+];
+
+const analyticsItems = [
   { href: "/dashboard/usage", label: "Usage", icon: "bar_chart" },
   { href: "/dashboard/api-key-usage", label: "API Usage", icon: "vpn_key" },
   { href: "/dashboard/quota", label: "Quota Tracker", icon: "data_usage" },
   { href: "/dashboard/token-saver", label: "Token Saver", icon: "savings" },
-  // { href: "/dashboard/pxpipe", label: "PXPIPE", icon: "image" },
   { href: "/dashboard/cli-tools", label: "CLI Tools", icon: "terminal" },
 ];
 
@@ -34,7 +35,7 @@ const workshopItems = [
   { href: "/dashboard/arena", label: "Battle Model", icon: "swords" },
   { href: "/dashboard/model-editor", label: "Custom Models", icon: "auto_awesome" },
   { href: "/dashboard/prd", label: "PRD Writer", icon: "description" },
-  { href: "/dashboard/plugins", label: "Power-Ups", icon: "widgets" },
+  { href: "/dashboard/plugins", label: "Power-Ups", icon: "widgets", badge: "7" },
 ];
 
 const debugItems = [
@@ -47,34 +48,39 @@ const systemItems = [
   { href: "/dashboard/proxy-pools", label: "Proxy Pools", icon: "lan" },
 ];
 
-function NavLink({ href, icon, label, active, onClick, sub = false, dot = false }) {
+function NavLink({ href, icon, label, active, onClick, sub = false, dot = false, badge = null }) {
   return (
     <Link
       href={href}
       onClick={onClick}
       className={cn(
-        "relative flex min-w-0 items-center gap-3 rounded-[10px] transition-all group",
+        "relative flex min-w-0 items-center gap-3 rounded-[10px] transition-all duration-150 group",
         sub ? "pl-7 pr-3 py-[6px]" : "px-3 py-[7px]",
         active
-          ? "bg-primary/10 text-primary font-semibold"
-          : "text-text-muted hover:bg-surface-2 hover:text-text-main"
+          ? "bg-gradient-to-r from-primary/15 via-primary/8 to-transparent text-primary font-semibold"
+          : "text-text-muted hover:bg-surface-2/80 hover:text-text-main"
       )}
     >
       {active && (
-        <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full bg-primary" />
+        <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full bg-primary shadow-[0_0_8px_var(--color-primary)]" />
       )}
       <span
         className={cn(
-          "material-symbols-outlined shrink-0 leading-none",
+          "material-symbols-outlined shrink-0 leading-none transition-colors",
           sub ? "size-4 text-[16px]" : "size-[18px] text-[18px]",
-          active ? "fill-1 text-primary" : "group-hover:text-primary transition-colors"
+          active ? "fill-1 text-primary drop-shadow-[0_0_6px_rgba(16,185,129,0.3)]" : "group-hover:text-primary"
         )}
       >
         {icon}
       </span>
       <span className="text-[13px] font-medium leading-none min-w-0 truncate" title={label}>{label}</span>
+      {badge && (
+        <span className="ml-auto text-[10px] font-mono font-semibold px-1.5 py-0.2 rounded-full bg-primary/15 text-primary border border-primary/25 shrink-0">
+          {badge}
+        </span>
+      )}
       {dot && (
-        <span className="ml-auto h-2 w-2 rounded-full bg-primary shrink-0" title="New upstream commits" />
+        <span className="ml-auto h-2 w-2 rounded-full bg-primary shrink-0 animate-pulse" title="New upstream commits" />
       )}
     </Link>
   );
@@ -109,6 +115,11 @@ export default function Sidebar({ onClose }) {
     if (item.href === "/dashboard/endpoint") return permissions.manageApiKeys;
     if (item.href === "/dashboard/providers") return permissions.manageProviders;
     if (item.href === "/dashboard/combos") return permissions.manageModels;
+    return false;
+  });
+
+  const filteredAnalyticsItems = analyticsItems.filter((item) => {
+    if (!isApiKeyUser) return true;
     if (item.href === "/dashboard/usage") return permissions.viewUsage;
     if (item.href === "/dashboard/api-key-usage") return permissions.viewUsage || permissions.manageApiKeys;
     if (item.href === "/dashboard/quota") return permissions.manageProviders;
@@ -212,16 +223,21 @@ export default function Sidebar({ onClose }) {
       <aside className="flex w-72 flex-col border-r border-border-subtle bg-vibrancy backdrop-blur-xl transition-colors duration-300 min-h-full">
 
         {/* Logo */}
-        <div className="px-6 py-4 flex flex-col gap-2">
-          <Link href="/dashboard" className="flex items-center gap-3">
-            <div className="flex items-center justify-center size-9 rounded-[10px] bg-gradient-to-br from-brand-500 to-brand-700 shadow-[var(--shadow-warm)]">
-              <span className="material-symbols-outlined text-white text-[20px]">hub</span>
+        <div className="px-5 py-4 flex flex-col gap-2.5 border-b border-border/40">
+          <Link href="/dashboard" className="flex items-center gap-3 group">
+            <div className="flex items-center justify-center size-9 rounded-xl bg-gradient-to-br from-surface to-surface-2 border border-primary/30 shadow-[0_0_12px_rgba(16,185,129,0.15)] group-hover:border-primary/50 transition-all">
+              <span className="material-symbols-outlined text-primary text-[20px] drop-shadow-[0_0_4px_rgba(16,185,129,0.4)]">hub</span>
             </div>
-            <div className="flex flex-col">
-              <h1 className="text-lg font-semibold tracking-tight text-text-main">
-                {APP_CONFIG.name}
-              </h1>
-              <span className="text-xs text-text-muted">v{APP_CONFIG.version}</span>
+            <div className="flex flex-col min-w-0">
+              <div className="flex items-center gap-1.5">
+                <h1 className="text-base font-bold tracking-tight text-text-main font-mono">
+                  9Router
+                </h1>
+                <span className="text-[10px] font-mono font-semibold px-1.5 py-0.2 rounded-full bg-primary/10 text-primary border border-primary/25">
+                  Kyyoa
+                </span>
+              </div>
+              <span className="text-[11px] text-text-muted font-mono truncate">v0.6.3 · Autonomous</span>
             </div>
           </Link>
           {isApiKeyUser && (
@@ -257,26 +273,13 @@ export default function Sidebar({ onClose }) {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 px-4 py-2 space-y-0.5 overflow-y-auto custom-scrollbar">
-          {filteredNavItems.map((item) => (
-            <NavLink
-              key={item.href}
-              href={item.href}
-              icon={item.icon}
-              label={item.label}
-              active={isActive(item.href)}
-              onClick={onClose}
-            />
-          ))}
-
-  
-        {/* FEATURE+ section — custom tools added by this fork */}
-          {filteredWorkshopItems.length > 0 && (
-          <div className="pt-3 mt-2 space-y-0.5">
-            <p className="px-4 text-xs font-semibold text-text-muted/60 uppercase tracking-wider mb-2">
-              FEATURE+
+        <nav className="flex-1 px-3 py-3 space-y-4 overflow-y-auto custom-scrollbar">
+          {/* GATEWAY Section */}
+          <div className="space-y-0.5">
+            <p className="px-3 text-[10px] font-mono font-semibold text-text-muted/60 uppercase tracking-widest mb-1">
+              GATEWAY
             </p>
-            {filteredWorkshopItems.map((item) => (
+            {filteredNavItems.map((item) => (
               <NavLink
                 key={item.href}
                 href={item.href}
@@ -287,13 +290,51 @@ export default function Sidebar({ onClose }) {
               />
             ))}
           </div>
+
+          {/* WORKSHOP Section */}
+          {filteredWorkshopItems.length > 0 && (
+            <div className="space-y-0.5">
+              <p className="px-3 text-[10px] font-mono font-semibold text-text-muted/60 uppercase tracking-widest mb-1">
+                WORKSHOP
+              </p>
+              {filteredWorkshopItems.map((item) => (
+                <NavLink
+                  key={item.href}
+                  href={item.href}
+                  icon={item.icon}
+                  label={item.label}
+                  active={isActive(item.href)}
+                  onClick={onClose}
+                  badge={item.badge}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* MONITORING Section */}
+          {filteredAnalyticsItems.length > 0 && (
+            <div className="space-y-0.5">
+              <p className="px-3 text-[10px] font-mono font-semibold text-text-muted/60 uppercase tracking-widest mb-1">
+                MONITORING
+              </p>
+              {filteredAnalyticsItems.map((item) => (
+                <NavLink
+                  key={item.href}
+                  href={item.href}
+                  icon={item.icon}
+                  label={item.label}
+                  active={isActive(item.href)}
+                  onClick={onClose}
+                />
+              ))}
+            </div>
           )}
 
           {/* System section — admin only, hidden from key sessions */}
           {!isApiKeyUser && (
-          <div className="pt-3 mt-2 space-y-0.5">
-            <p className="px-4 text-xs font-semibold text-text-muted/60 uppercase tracking-wider mb-2">
-              System
+          <div className="space-y-0.5">
+            <p className="px-3 text-[10px] font-mono font-semibold text-text-muted/60 uppercase tracking-widest mb-1">
+              SYSTEM
             </p>
 
             {/* Media Providers accordion */}
@@ -302,12 +343,12 @@ export default function Sidebar({ onClose }) {
               className={cn(
                 "relative w-full flex items-center gap-3 px-3 py-[7px] rounded-[10px] transition-all group",
                 pathname.startsWith("/dashboard/media-providers")
-                  ? "bg-primary/10 text-primary"
-                  : "text-text-muted hover:bg-surface-2 hover:text-text-main"
+                  ? "bg-gradient-to-r from-primary/15 via-primary/8 to-transparent text-primary font-semibold"
+                  : "text-text-muted hover:bg-surface-2/80 hover:text-text-main"
               )}
             >
               {pathname.startsWith("/dashboard/media-providers") && (
-                <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full bg-primary" />
+                <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full bg-primary shadow-[0_0_8px_var(--color-primary)]" />
               )}
               <span className="material-symbols-outlined size-[18px] text-[18px] leading-none shrink-0">perm_media</span>
               <span className="text-[13px] font-medium leading-none flex-1 text-left min-w-0 truncate" title="Media Providers">Media Providers</span>
@@ -319,7 +360,7 @@ export default function Sidebar({ onClose }) {
               </span>
             </button>
             {mediaOpen && (
-              <div className="pl-4">
+              <div className="pl-4 space-y-0.5">
                 {MEDIA_PROVIDER_KINDS.filter((k) => VISIBLE_MEDIA_KINDS.includes(k.id)).map((kind) => (
                   <NavLink
                     key={kind.id}
@@ -384,6 +425,30 @@ export default function Sidebar({ onClose }) {
           </div>
           )}
         </nav>
+
+        {/* Bottom Gateway Status */}
+        <div className="p-3 border-t border-border/40">
+          <div className="flex items-center justify-between p-2.5 rounded-xl bg-surface-2/60 border border-border/40 backdrop-blur-md">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              <div className="flex flex-col min-w-0">
+                <span className="text-[11px] font-mono font-medium text-text-main truncate">Port :20130</span>
+                <span className="text-[10px] text-text-muted font-mono truncate">88 Models Ready</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => copy("http://127.0.0.1:20130/v1")}
+              className="px-2 py-1 rounded text-[10px] font-mono font-medium bg-surface text-text-muted hover:text-primary hover:border-primary/30 border border-border/50 transition-colors cursor-pointer shrink-0"
+              title="Copy Base URL"
+            >
+              {copied ? "✓ Copied" : "Copy URL"}
+            </button>
+          </div>
+        </div>
 
       </aside>
 

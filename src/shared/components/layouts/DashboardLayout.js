@@ -110,9 +110,18 @@ export default function DashboardLayout({ children }) {
       </div>
 
       {/* Main content */}
-      <main className="flex flex-col flex-1 h-full min-w-0 relative transition-colors duration-300 isolate">
-        {/* Faint grid background */}
-        <div className="landing-grid absolute inset-0 pointer-events-none -z-10" aria-hidden="true" />
+      <main className="flex flex-col flex-1 h-full min-w-0 relative transition-colors duration-300 isolate bg-bg overflow-hidden">
+        {/* Kyyoa Cyber-Atmosphere Ambient Mesh Gradients */}
+        <div className="absolute inset-0 pointer-events-none -z-10 overflow-hidden" aria-hidden="true">
+          {/* Top-right Emerald Aura */}
+          <div className="absolute -top-[20%] right-[0%] w-[620px] h-[550px] rounded-full bg-emerald-500/[0.08] dark:bg-emerald-500/[0.10] blur-[130px]" />
+          {/* Top-left Cyan Pulse */}
+          <div className="absolute top-[20%] -left-[10%] w-[500px] h-[450px] rounded-full bg-cyan-500/[0.06] dark:bg-cyan-500/[0.08] blur-[120px]" />
+          {/* Center-bottom Accent Glow */}
+          <div className="absolute -bottom-[20%] right-[30%] w-[650px] h-[500px] rounded-full bg-primary/[0.04] dark:bg-emerald-500/[0.05] blur-[140px]" />
+          {/* Faint grid background */}
+          <div className="landing-grid absolute inset-0 opacity-40 dark:opacity-20" />
+        </div>
         <Header key={pathname} onMenuClick={() => setSidebarOpen(true)} />
         <TaskDock />
         <div className={`flex-1 overflow-y-auto custom-scrollbar ${pathname === "/dashboard/basic-chat" ? "" : "p-6 lg:p-10"} ${pathname === "/dashboard/basic-chat" ? "flex flex-col overflow-hidden" : ""}`}>

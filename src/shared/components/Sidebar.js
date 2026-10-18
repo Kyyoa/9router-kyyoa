@@ -428,25 +428,33 @@ export default function Sidebar({ onClose }) {
 
         {/* Bottom Gateway Status */}
         <div className="p-3 border-t border-border/40">
-          <div className="flex items-center justify-between p-2.5 rounded-xl bg-surface-2/60 border border-border/40 backdrop-blur-md">
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-              </span>
-              <div className="flex flex-col min-w-0">
-                <span className="text-[11px] font-mono font-medium text-text-main truncate">Port :20130</span>
-                <span className="text-[10px] text-text-muted font-mono truncate">88 Models Ready</span>
+          <div className="flex flex-col gap-2 p-2.5 rounded-xl bg-surface-2/70 border border-border/50 backdrop-blur-md shadow-sm">
+            <div className="flex items-center justify-between min-w-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="relative flex h-2 w-2 shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                <div className="flex flex-col min-w-0">
+                  <span className="text-[11px] font-mono font-semibold text-text-main truncate">Local Gateway</span>
+                  <span className="text-[10px] text-emerald-500 font-mono font-medium truncate">Port :20130 · Active</span>
+                </div>
               </div>
+              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 shrink-0">
+                88 Free
+              </span>
             </div>
-            <button
-              type="button"
-              onClick={() => copy("http://127.0.0.1:20130/v1")}
-              className="px-2 py-1 rounded text-[10px] font-mono font-medium bg-surface text-text-muted hover:text-primary hover:border-primary/30 border border-border/50 transition-colors cursor-pointer shrink-0"
-              title="Copy Base URL"
-            >
-              {copied ? "✓ Copied" : "Copy URL"}
-            </button>
+            <div className="flex items-center gap-1.5 pt-1 border-t border-border/30">
+              <button
+                type="button"
+                onClick={() => copy("http://127.0.0.1:20130/v1")}
+                className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-[10px] font-mono font-medium bg-surface hover:bg-surface-3 text-text-main hover:text-primary border border-border/60 hover:border-primary/40 transition-all cursor-pointer shadow-xs"
+                title="Salin Base URL API untuk Cursor, Cline, Roo Code, atau SDK"
+              >
+                <span className="material-symbols-outlined text-[13px] text-primary">{copied ? "check" : "content_copy"}</span>
+                <span>{copied ? "Base URL Copied!" : "Copy API Base URL"}</span>
+              </button>
+            </div>
           </div>
         </div>
 

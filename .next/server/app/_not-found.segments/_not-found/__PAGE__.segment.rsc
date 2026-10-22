@@ -1,0 +1,26 @@
+1:"$Sreact.fragment"
+2:I[90484,[],"OutletBoundary"]
+3:"$Sreact.suspense"
+7:I[90484,[],"ViewportBoundary"]
+8:I[90484,[],"MetadataBoundary"]
+9:I[86869,[],"IconMark"]
+b:I[57121,[],""]
+c:I[74581,[],""]
+f:I[21110,["3614","static/chunks/3614-68a6294029dba482.js","1321","static/chunks/1321-5547348448ffe390.js","705","static/chunks/705-0944869456af8522.js","5497","static/chunks/5497-49a250a31e9ba695.js","9305","static/chunks/app/(dashboard)/layout-31348e45ed65fb53.js"],"ThemeProvider"]
+10:I[94635,["2285","static/chunks/2285-2e92c7009ef9751c.js","1321","static/chunks/1321-5547348448ffe390.js","7177","static/chunks/app/layout-d0d9920891c5011e.js"],"RuntimeI18nProvider"]
+11:I[30565,["2285","static/chunks/2285-2e92c7009ef9751c.js","1321","static/chunks/1321-5547348448ffe390.js","7177","static/chunks/app/layout-d0d9920891c5011e.js"],"GoogleAnalytics"]
+:HL["/_next/static/css/7b736202f0b1dbfd.css","style"]
+:HL["/_next/static/css/08d0d2f2addb815a.css","style"]
+6:X
+e:X
+e:C
+0:{"buildId":"ErZIExZmGEE5dFmHrw6WX","data":[{"rsc":["$","$1","c",{"children":[[["$","title",null,{"children":"404: This page could not be found."}],["$","div",null,{"style":{"fontFamily":"system-ui,\"Segoe UI\",Roboto,Helvetica,Arial,sans-serif,\"Apple Color Emoji\",\"Segoe UI Emoji\"","height":"100vh","textAlign":"center","display":"flex","flexDirection":"column","alignItems":"center","justifyContent":"center"},"children":["$","div",null,{"children":[["$","style",null,{"dangerouslySetInnerHTML":{"__html":"body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}"}}],["$","h1",null,{"className":"next-error-h1","style":{"display":"inline-block","margin":"0 20px 0 0","padding":"0 23px 0 0","fontSize":24,"fontWeight":500,"verticalAlign":"top","lineHeight":"49px"},"children":404}],["$","div",null,{"style":{"display":"inline-block"},"children":["$","h2",null,{"style":{"fontSize":14,"fontWeight":400,"lineHeight":"49px","margin":0},"children":"This page could not be found."}]}]]}]}]],null,["$","$L2",null,{"children":["$","$3",null,{"name":"Next.MetadataOutlet","children":"$@4"}]}]]}],"isPartial":"$@5","staleTime":"$6","varyParams":null},{"rsc":["$","$1","h",{"children":[["$","meta",null,{"name":"robots","content":"noindex"}],["$","$L7",null,{"children":[["$","meta","0",{"charSet":"utf-8"}],["$","meta","1",{"name":"viewport","content":"width=device-width, initial-scale=1"}],["$","meta","2",{"name":"theme-color","content":"#0a0a0a"}]]}],["$","div",null,{"hidden":true,"children":["$","$L8",null,{"children":["$","$3",null,{"name":"Next.Metadata","children":[["$","title","0",{"children":"9Router Kyyoa - Kyyoa's AI Gateway"}],["$","meta","1",{"name":"description","content":"One endpoint for all your AI providers. Manage keys, monitor usage, and scale effortlessly."}],["$","link","2",{"rel":"manifest","href":"/manifest.webmanifest"}],["$","link","3",{"rel":"icon","href":"/favicon.ico?603d046c9a6fdfbb","type":"image/x-icon","sizes":"16x16"}],["$","link","4",{"rel":"icon","href":"/favicon.svg"}],["$","$L9","5",{}]]}]}]}],["$","meta",null,{"name":"next-size-adjust","content":""}]]}],"isPartial":"$@a","staleTime":"$6","varyParams":null},{"rsc":["$","$1","c",{"children":[null,["$","$Lb",null,{"parallelRouterKey":"children","template":["$","$Lc",null,{}]}]]}],"isPartial":"$@d","staleTime":"$6","varyParams":"$e"},{"rsc":["$","$1","c",{"children":[[["$","link","0",{"rel":"stylesheet","href":"/_next/static/css/7b736202f0b1dbfd.css","precedence":"next"}],["$","link","1",{"rel":"stylesheet","href":"/_next/static/css/08d0d2f2addb815a.css","precedence":"next"}]],["$","html",null,{"lang":"en","suppressHydrationWarning":true,"children":[["$","head",null,{"children":[["$","script",null,{"dangerouslySetInnerHTML":{"__html":"document.documentElement.classList.add('dark');"}}],["$","script",null,{"dangerouslySetInnerHTML":{"__html":"var d=document,r=d.documentElement,f=function(){r.classList.add('fonts-loaded')};if(d.fonts&&d.fonts.load){d.fonts.load('24px \"Material Symbols Outlined\"').then(f).catch(f);setTimeout(f,3000)}else{f()}"}}]]}],["$","body",null,{"className":"__variable_d8ebd1 font-sans antialiased","children":[["$","$Lf",null,{"children":["$","$L10",null,{"children":["$","$Lb",null,{"parallelRouterKey":"children","template":["$","$Lc",null,{}]}]}]}],["$","$L11",null,{"gaId":"G-LC959F603F"}]]}]]}]]}],"isPartial":"$@12","staleTime":"$6","varyParams":null}],"isUpgradeableISRFallback":false,"a":"$@13","rootVaryParams":null,"needsRuntimeRequest":"$@14"}
+4:null
+6:300
+14:true
+6:C
+13:0
+a:"$undefined"
+d:"$undefined"
+12:"$undefined"
+5:"$undefined"

@@ -1,0 +1,82 @@
+{
+  "app/(dashboard)/dashboard/profile/page.js -> @/shared/components/Loading": {
+    "id": 25086,
+    "files": []
+  },
+  "app/(dashboard)/dashboard/translator/page.js -> @monaco-editor/react": {
+    "id": 28202,
+    "files": [
+      "static/chunks/8202.1ffc6ce531e066ce.js"
+    ]
+  },
+  "shared/components/UsageStats.js -> @/app/(dashboard)/dashboard/usage/components/ProviderBarChart": {
+    "id": 82435,
+    "files": [
+      "static/chunks/3842-da1878db3339b090.js",
+      "static/chunks/5815-5ae3ffefacfeacef.js",
+      "static/chunks/8569.df0d706176dc1f57.js",
+      "static/chunks/2435.68c266373458d3d4.js"
+    ]
+  },
+  "shared/components/UsageStats.js -> @/app/(dashboard)/dashboard/usage/components/ProviderTopology": {
+    "id": 63521,
+    "files": [
+      "static/css/e07f2bf4fa519943.css",
+      "static/chunks/1a258343.290297ea7c7f28c0.js",
+      "static/chunks/3842-da1878db3339b090.js",
+      "static/chunks/6357.59e23f8c59426c8f.js",
+      "static/chunks/3521.623a9b09e61befd0.js"
+    ]
+  },
+  "shared/components/UsageStats.js -> @/app/(dashboard)/dashboard/usage/components/TopModelsChart": {
+    "id": 65462,
+    "files": [
+      "static/chunks/3842-da1878db3339b090.js",
+      "static/chunks/5815-5ae3ffefacfeacef.js",
+      "static/chunks/8569.df0d706176dc1f57.js",
+      "static/chunks/5462.c82c64c26a864ec0.js"
+    ]
+  },
+  "shared/components/UsageStats.js -> @/app/(dashboard)/dashboard/usage/components/UsageChart": {
+    "id": 10124,
+    "files": [
+      "static/chunks/3842-da1878db3339b090.js",
+      "static/chunks/5815-5ae3ffefacfeacef.js",
+      "static/chunks/1649-772a31b7f3a65900.js",
+      "static/chunks/124.ac11ada32848263f.js"
+    ]
+  },
+  "shared/components/layouts/DashboardLayout.js -> @/app/(dashboard)/dashboard/usage/components/ProviderBarChart": {
+    "id": 82435,
+    "files": [
+      "static/chunks/3842-da1878db3339b090.js",
+      "static/chunks/5815-5ae3ffefacfeacef.js",
+      "static/chunks/8569.df0d706176dc1f57.js",
+      "static/chunks/2435.68c266373458d3d4.js"
+    ]
+  },
+  "shared/components/layouts/DashboardLayout.js -> @/app/(dashboard)/dashboard/usage/components/TopModelsChart": {
+    "id": 65462,
+    "files": [
+      "static/chunks/3842-da1878db3339b090.js",
+      "static/chunks/5815-5ae3ffefacfeacef.js",
+      "static/chunks/8569.df0d706176dc1f57.js",
+      "static/chunks/5462.c82c64c26a864ec0.js"
+    ]
+  },
+  "shared/components/layouts/DashboardLayout.js -> @/app/(dashboard)/dashboard/usage/components/UsageChart": {
+    "id": 10124,
+    "files": [
+      "static/chunks/3842-da1878db3339b090.js",
+      "static/chunks/5815-5ae3ffefacfeacef.js",
+      "static/chunks/1649-772a31b7f3a65900.js",
+      "static/chunks/124.ac11ada32848263f.js"
+    ]
+  },
+  "shared/components/layouts/DashboardLayout.js -> @/shared/components/UsageStats": {
+    "id": 26820,
+    "files": [
+      "static/chunks/6820-f429331a25244144.js"
+    ]
+  }
+}

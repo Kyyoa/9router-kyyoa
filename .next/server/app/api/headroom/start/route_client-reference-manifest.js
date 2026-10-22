@@ -1,0 +1,1 @@
+globalThis.__RSC_MANIFEST=(globalThis.__RSC_MANIFEST||{});globalThis.__RSC_MANIFEST["/api/headroom/start/route"]={"moduleLoading":{"prefix":"/_next/"},"ssrModuleMapping":{},"edgeSSRModuleMapping":{},"clientModules":{},"entryCSSFiles":{"/home/kyyoa/Projects/9router-kyyoa/src/app/api/headroom/start/route":[]},"rscModuleMapping":{},"edgeRscModuleMapping":{}};

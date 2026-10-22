@@ -1,0 +1,85 @@
+"use strict";(()=>{var a={};a.id=9461,a.ids=[9461],a.modules={261:a=>{a.exports=require("next/dist/shared/lib/router/utils/app-paths")},643:a=>{a.exports=require("node:perf_hooks")},1708:a=>{a.exports=require("node:process")},1932:a=>{a.exports=require("url")},4573:a=>{a.exports=require("node:buffer")},7066:a=>{a.exports=require("node:tty")},8128:a=>{a.exports=require("next/dist/server/runtime-reacts.external.js")},10846:a=>{a.exports=require("next/dist/compiled/next-server/app-page.runtime.prod.js")},14985:a=>{a.exports=require("dns")},16698:a=>{a.exports=require("node:async_hooks")},21820:a=>{a.exports=require("os")},27910:a=>{a.exports=require("stream")},28354:a=>{a.exports=require("util")},29021:a=>{a.exports=require("fs")},29294:a=>{a.exports=require("next/dist/server/app-render/work-async-storage.external.js")},31421:a=>{a.exports=require("node:child_process")},32467:a=>{a.exports=require("node:http2")},33873:a=>{a.exports=require("path")},34589:a=>{a.exports=require("node:assert")},37067:a=>{a.exports=require("node:http")},37540:a=>{a.exports=require("node:console")},38522:a=>{a.exports=require("node:zlib")},40610:a=>{a.exports=require("node:dns")},41692:a=>{a.exports=require("node:tls")},41792:a=>{a.exports=require("node:querystring")},44870:a=>{a.exports=require("next/dist/compiled/next-server/app-route.runtime.prod.js")},46293:a=>{a.exports=require("sql.js")},48161:a=>{a.exports=require("node:os")},51455:a=>{a.exports=require("node:fs/promises")},53053:a=>{a.exports=require("node:diagnostics_channel")},55511:a=>{a.exports=require("crypto")},55591:a=>{a.exports=require("https")},57075:a=>{a.exports=require("node:stream")},57975:a=>{a.exports=require("node:util")},61417:(a,b,c)=>{c.r(b),c.d(b,{GET:()=>e,OPTIONS:()=>d.OPTIONS});var d=c(18096);async function e(a){let b=a.headers.get("accept")||"";return b.includes("text/html")&&!b.includes("application/json")?new Response(`<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="refresh" content="0; url=/dashboard/endpoint">
+  <title>9Router Kyyoa \xb7 API Gateway</title>
+  <style>
+    body {
+      background-color: #0b0f17;
+      color: #ededed;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+    .card {
+      background: #121824;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      padding: 32px;
+      border-radius: 16px;
+      text-align: center;
+      max-width: 480px;
+      width: 100%;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6), 0 0 20px rgba(16, 185, 129, 0.1);
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      background: rgba(16, 185, 129, 0.15);
+      color: #10b981;
+      font-size: 11px;
+      font-family: monospace;
+      font-weight: 600;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      margin-bottom: 16px;
+    }
+    h2 {
+      margin: 0 0 10px;
+      font-size: 20px;
+      font-weight: 700;
+      color: #ffffff;
+      font-family: monospace;
+    }
+    p {
+      color: #9ca3af;
+      font-size: 13px;
+      line-height: 1.6;
+      margin: 0 0 24px;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      background: #10b981;
+      color: #052e16;
+      font-weight: 600;
+      text-decoration: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-family: monospace;
+      transition: all 0.2s;
+    }
+    .btn:hover {
+      background: #34d399;
+      box-shadow: 0 0 15px rgba(16, 185, 129, 0.4);
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="badge">● GATEWAY ONLINE (:20130)</div>
+    <h2>9Router Kyyoa AI Gateway</h2>
+    <p>URL ini adalah <strong>OpenAI Base URL</strong> untuk klien AI seperti Cursor, Cline, Roo Code, atau SDK.<br>Sedang mengarahkan Anda ke Dashboard...</p>
+    <a href="/dashboard/endpoint" class="btn">Buka Dashboard &rarr;</a>
+  </div>
+</body>
+</html>`,{status:200,headers:{"Content-Type":"text/html; charset=utf-8","Cache-Control":"no-store, no-cache, must-revalidate"}}):(0,d.GET)(a)}},63033:a=>{a.exports=require("next/dist/server/app-render/work-unit-async-storage.external.js")},71553:a=>{a.exports=require("node:dns/promises")},71622:a=>{a.exports=import("open")},73024:a=>{a.exports=require("node:fs")},73136:a=>{a.exports=require("node:url")},73429:a=>{a.exports=require("node:util/types")},73496:a=>{a.exports=require("http2")},74075:a=>{a.exports=require("zlib")},75919:a=>{a.exports=require("node:worker_threads")},76760:a=>{a.exports=require("node:path")},77030:a=>{a.exports=require("node:net")},77598:a=>{a.exports=require("node:crypto")},78474:a=>{a.exports=require("node:events")},79646:a=>{a.exports=require("child_process")},80099:a=>{a.exports=require("node:sqlite")},81630:a=>{a.exports=require("http")},81787:a=>{a.exports=require("bun:sqlite")},86439:a=>{a.exports=require("next/dist/shared/lib/no-fallback-error.external")},87550:a=>{a.exports=require("better-sqlite3")},87997:a=>{a.exports=require("node:timers")},91645:a=>{a.exports=require("net")},94735:a=>{a.exports=require("events")},99954:(a,b,c)=>{c.r(b),c.d(b,{handler:()=>z,patchFetch:()=>y,routeModule:()=>u,serverHooks:()=>x,workAsyncStorage:()=>v,workUnitAsyncStorage:()=>w});var d=c(19225),e=c(84006),f=c(8317),g=c(99373),h=c(34775),i=c(24235),j=c(261),k=c(54365),l=c(90771),m=c(73461),n=c(67798),o=c(92280),p=c(62018),q=c(45696),r=c(47929),s=c(86439),t=c(37527);let u=new d.AppRouteRouteModule({definition:{kind:e.RouteKind.APP_ROUTE,page:"/api/v1/route",pathname:"/api/v1",filename:"route",bundlePath:"app/api/v1/route"},distDir:".next",relativeProjectDir:"",resolvedPagePath:"/home/kyyoa/Projects/9router-kyyoa/src/app/api/v1/route.js",nextConfigOutput:"standalone",userland:()=>c(61417),...{}}),{workAsyncStorage:v,workUnitAsyncStorage:w,serverHooks:x}=u;function y(){return(0,f.patchFetch)({workAsyncStorage:v,workUnitAsyncStorage:w})}async function z(a,b,c){c.requestMeta&&(0,g.setRequestMeta)(a,c.requestMeta),u.isDev&&(0,g.addRequestMeta)(a,"devRequestTimingInternalsEnd",process.hrtime.bigint());let d="/api/v1/route";"/index"===d&&(d="/");let f=await u.prepare(a,b,{srcPage:d,multiZoneDraftMode:!1});if(!f)return b.statusCode=400,b.end("Bad Request"),null==c.waitUntil||c.waitUntil.call(c,Promise.resolve()),null;let{buildId:v,deploymentId:w,params:x,nextConfig:y,parsedUrl:z,isDraftMode:A,prerenderManifest:B,routerServerContext:C,isOnDemandRevalidate:D,revalidateOnlyGenerated:E,resolvedPathname:F,clientReferenceManifest:G,serverActionsManifest:H}=f,I=(0,j.normalizeAppPath)(d),J=!!(B.dynamicRoutes[I]||B.routes[F]),K=async()=>((null==C?void 0:C.render404)?await C.render404(a,b,z,!1):b.end("This page could not be found"),null);if(J&&!A){let a=!!B.routes[F],b=B.dynamicRoutes[I];if(b&&!1===b.fallback&&!a){if(y.adapterPath)return await K();throw new s.NoFallbackError}}let L=null;!J||u.isDev||A||(L="/index"===(L=F)?"/":L);let M=!0===u.isDev||!J,N=J&&!M;H&&G&&(0,i.setManifestsSingleton)({page:d,clientReferenceManifest:G,serverActionsManifest:H});let O=a.method||"GET",P=(0,h.getTracer)(),Q=P.getActiveScopeSpan(),R=!!(null==C?void 0:C.isWrappedByNextServer),S=!!(0,g.getRequestMeta)(a,"minimalMode"),T=(0,g.getRequestMeta)(a,"incrementalCache")||await u.getIncrementalCache(a,y,B,S);null==T||T.resetRequestCache(),globalThis.__incrementalCache=T;let U={params:x,previewProps:B.preview,renderOpts:{experimental:{authInterrupts:!!y.experimental.authInterrupts,useCacheTimeout:y.experimental.useCacheTimeout},cacheComponents:!!y.cacheComponents,validationLevel:y.experimental.instantInsights.validationLevel,supportsDynamicResponse:M,incrementalCache:T,hmrRefreshHash:(0,g.getRequestMeta)(a,"hmrRefreshHash"),cacheLifeProfiles:y.cacheLife,staticPageGenerationTimeout:y.staticPageGenerationTimeout,waitUntil:c.waitUntil,onClose:a=>{b.on("close",a)},onAfterTaskError:void 0,onInstrumentationRequestError:(b,c,d,e)=>u.onRequestError(a,b,d,e,C)},sharedContext:{buildId:v,deploymentId:w}},V=new k.NodeNextRequest(a),W=new k.NodeNextResponse(b),X=l.NextRequestAdapter.fromNodeNextRequest(V,(0,l.signalFromNodeResponse)(b)),Y=async({previousCacheEntry:e})=>{try{if(!S&&D&&E&&!e)return b.statusCode=404,b.setHeader("x-nextjs-cache","REVALIDATED"),b.end("This page could not be found"),null;let d=await u.handle(X,U);a.fetchMetrics=U.renderOpts.fetchMetrics;let f=U.renderOpts.pendingWaitUntil;f&&c.waitUntil&&(c.waitUntil(f),f=void 0);let g=U.renderOpts.collectedTags;if(!J)return await (0,o.I)(V,W,d,f),null;{let a=await d.blob(),b=(0,p.toNodeOutgoingHttpHeaders)(d.headers);g&&(b[r.NEXT_CACHE_TAGS_HEADER]=g),!b["content-type"]&&a.type&&(b["content-type"]=a.type);let c=void 0!==U.renderOpts.collectedRevalidate&&!(U.renderOpts.collectedRevalidate>=r.INFINITE_CACHE)&&U.renderOpts.collectedRevalidate,e=void 0===U.renderOpts.collectedExpire||U.renderOpts.collectedExpire>=r.INFINITE_CACHE?!1!==c&&c>0?y.expireTime:void 0:U.renderOpts.collectedExpire;return{value:{kind:t.CachedRouteKind.APP_ROUTE,status:d.status,body:Buffer.from(await a.arrayBuffer()),headers:b},cacheControl:{revalidate:c,expire:e}}}}catch(b){throw(null==e?void 0:e.isStale)&&await u.onRequestError(a,b,{routerKind:"App Router",routePath:d,routeType:"route",revalidateReason:(0,n.getRevalidateReason)({isStaticGeneration:N,isOnDemandRevalidate:D})},!1,C),b}},Z=async(d,f)=>{try{var g,i;let d=await u.handleResponse({req:a,nextConfig:y,cacheKey:L,routeKind:e.RouteKind.APP_ROUTE,isFallback:!1,prerenderManifest:B,isRoutePPREnabled:!1,isOnDemandRevalidate:D,revalidateOnlyGenerated:E,responseGenerator:Y,waitUntil:c.waitUntil,isMinimalMode:S});if(!J)return;if((null==d||null==(g=d.value)?void 0:g.kind)!==t.CachedRouteKind.APP_ROUTE)throw Object.defineProperty(Error(`Invariant: app-route received invalid cache entry ${null==d||null==(i=d.value)?void 0:i.kind}`),"__NEXT_ERROR_CODE",{value:"E701",enumerable:!1,configurable:!0});S||b.setHeader("x-nextjs-cache",D?"REVALIDATED":d.isMiss?"MISS":d.isStale?"STALE":"HIT"),A&&b.setHeader("Cache-Control","private, no-cache, no-store, max-age=0, must-revalidate");let f=(0,p.fromNodeOutgoingHttpHeaders)(d.value.headers);S&&J||f.delete(r.NEXT_CACHE_TAGS_HEADER),!d.cacheControl||b.getHeader("Cache-Control")||f.get("Cache-Control")||f.set("Cache-Control",(0,q.getCacheControlHeader)(d.cacheControl)),await (0,o.I)(V,W,new Response(d.value.body,{headers:f,status:d.value.status||200}));return}catch(b){if(b instanceof s.NoFallbackError||await u.onRequestError(a,b,{routerKind:"App Router",routePath:I,routeType:"route",revalidateReason:(0,n.getRevalidateReason)({isStaticGeneration:N,isOnDemandRevalidate:D})},!1,C),J)throw b;await (0,o.I)(V,W,new Response(null,{status:500}));return}finally{(()=>{if(!d)return;let a=b.statusCode;d.setAttributes({"http.status_code":a,"next.rsc":!1}),a&&a>=500&&(d.setStatus({code:h.SpanStatusCode.ERROR}),d.setAttribute("error.type",a.toString()));let c=P.getRootSpanAttributes();if(!c)return;if(c.get("next.span_type")!==m.BaseServerSpan.handleRequest)return console.warn(`Unexpected root span type '${c.get("next.span_type")}'. Please report this Next.js issue https://github.com/vercel/next.js`);let e=c.get("next.route")||I,g=`${O} ${e}`;d.setAttributes({"next.route":e,"http.route":e,"next.span_name":g}),d.updateName(g),f&&f!==d&&(f.setAttribute("http.route",e),f.updateName(g))})()}};if(R&&Q)await Z(Q,void 0);else{let b=P.getActiveScopeSpan();await P.withPropagatedContext(a.headers,()=>P.trace(m.BaseServerSpan.handleRequest,{spanName:`${O} ${d}`,kind:h.SpanKind.SERVER,attributes:{"http.method":O,"http.target":a.url}},a=>Z(a,b)),void 0,!R)}}}};var b=require("../../../webpack-runtime.js");b.C(a);var c=b.X(0,[4741,6343,6655,891,6070,1329,8920,436,24,3943,2329,3225,5215,7828,3121,9651],()=>b(b.s=99954));module.exports=c})();

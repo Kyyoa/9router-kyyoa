@@ -1,0 +1,11 @@
+{
+  "name": "9router-kyyoa",
+  "version": "0.6.3",
+  "description": "9router-kyyoa \u2014 Kyyoa's fork of the 9Router web dashboard",
+  "private": true,
+  "scripts": {
+    "start": "node start.js"
+  },
+  "dependencies": {},
+  "comment_better_sqlite3": "kept in optionalDependencies so npm install doesn't fail on systems without build tools \u2014 sql.js is used as fallback at runtime"
+}

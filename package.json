@@ -1,0 +1,10 @@
+{
+  "name": "9router-botkeep",
+  "version": "0.6.3",
+  "private": true,
+  "description": "9router standalone build packaged for Botkeep",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {}
+}

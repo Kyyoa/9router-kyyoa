@@ -1,0 +1,11 @@
+{
+  "name": "9router-botkeep",
+  "version": "0.6.3",
+  "private": true,
+  "description": "9router standalone build packaged for Botkeep",
+  "scripts": {
+    "start": "node index.js",
+    "postinstall": "node -e \"const f=require('fs'),p=require('path');const r=process.cwd();const t=p.join(r,'payload.tgz');const s=p.join(r,'package','start.js');if(!f.existsSync(s)&&f.existsSync(t)){require('child_process').execFileSync('tar',['-xzf',t,'-C',r],{stdio:'inherit'})}\""
+  },
+  "dependencies": {}
+}

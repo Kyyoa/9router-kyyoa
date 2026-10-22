@@ -10,6 +10,38 @@ const root = __dirname;
 const inner = path.join(root, "package");
 const startScript = path.join(inner, "start.js");
 
+// Botkeep writes managed variables to /home/container/.env, but the Next
+// standalone server loads .env relative to its own directory. Bridge the two
+// before anything reads process.env.
+function loadParentEnv() {
+  const candidates = [
+    path.join(root, ".env"),
+    path.join(root, "..", ".env"),
+  ];
+  for (const file of candidates) {
+    if (!fs.existsSync(file)) continue;
+    const text = fs.readFileSync(file, "utf8");
+    for (const raw of text.split(/\r?\n/)) {
+      const line = raw.trim();
+      if (!line || line.startsWith("#")) continue;
+      const eq = line.indexOf("=");
+      if (eq < 1) continue;
+      const key = line.slice(0, eq).trim();
+      let value = line.slice(eq + 1).trim();
+      if (
+        (value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))
+      ) {
+        value = value.slice(1, -1);
+      }
+      if (!(key in process.env)) process.env[key] = value;
+    }
+    console.log(`[bootstrap] loaded managed environment from ${file}`);
+    return;
+  }
+  console.log("[bootstrap] no managed .env found");
+}
+
 function rebuild() {
   const partsDir = path.join(root, "parts");
   const parts = fs
@@ -30,6 +62,8 @@ function rebuild() {
   fs.unlinkSync(joined);
   console.log("[bootstrap] extracted package/");
 }
+
+loadParentEnv();
 
 if (!fs.existsSync(startScript)) {
   rebuild();

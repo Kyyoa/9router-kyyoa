@@ -14,10 +14,7 @@ const startScript = path.join(inner, "start.js");
 // standalone server loads .env relative to its own directory. Bridge the two
 // before anything reads process.env.
 function loadParentEnv() {
-  const candidates = [
-    path.join(root, ".env"),
-    path.join(root, "..", ".env"),
-  ];
+  const candidates = [path.join(root, ".env"), path.join(root, "..", ".env")];
   for (const file of candidates) {
     if (!fs.existsSync(file)) continue;
     const text = fs.readFileSync(file, "utf8");
@@ -40,6 +37,46 @@ function loadParentEnv() {
     return;
   }
   console.log("[bootstrap] no managed .env found");
+}
+
+// apiKeysRepo writes a createdBy column that the shipped schema never creates,
+// so POST /api/keys dies with "table apiKeys has no column named createdBy".
+// Patch the live database in place; idempotent and safe to run every boot.
+function patchDatabase() {
+  const dataDir = process.env.DATA_DIR
+    ? path.resolve(process.env.DATA_DIR)
+    : path.join(inner, "data");
+  const dbFile = path.join(dataDir, "db", "data.sqlite");
+  if (!fs.existsSync(dbFile)) return;
+
+  let DatabaseSync;
+  try {
+    ({ DatabaseSync } = require("node:sqlite"));
+  } catch {
+    console.log("[bootstrap] node:sqlite unavailable, skipping db patch");
+    return;
+  }
+
+  try {
+    const db = new DatabaseSync(dbFile);
+    const cols = db
+      .prepare("PRAGMA table_info(apiKeys)")
+      .all()
+      .map((r) => r.name);
+    if (!cols.length) {
+      db.close();
+      return;
+    }
+    if (!cols.includes("createdBy")) {
+      db.exec("ALTER TABLE apiKeys ADD COLUMN createdBy TEXT DEFAULT ''");
+      console.log("[bootstrap] patched apiKeys.createdBy");
+    } else {
+      console.log("[bootstrap] apiKeys.createdBy already present");
+    }
+    db.close();
+  } catch (err) {
+    console.log(`[bootstrap] db patch skipped: ${err.message}`);
+  }
 }
 
 function rebuild() {
@@ -73,5 +110,7 @@ if (!fs.existsSync(startScript)) {
   console.error("[bootstrap] package/start.js still missing after extraction");
   process.exit(1);
 }
+
+patchDatabase();
 
 require(startScript);

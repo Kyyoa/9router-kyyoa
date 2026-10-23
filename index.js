@@ -41,42 +41,58 @@ function loadParentEnv() {
 
 // apiKeysRepo writes a createdBy column that the shipped schema never creates,
 // so POST /api/keys dies with "table apiKeys has no column named createdBy".
-// Patch the live database in place; idempotent and safe to run every boot.
-function patchDatabase() {
+// The server creates the database itself during startup, so the patch has to
+// retry until the table shows up. Idempotent and safe to run repeatedly.
+function patchOnce() {
   const dataDir = process.env.DATA_DIR
     ? path.resolve(process.env.DATA_DIR)
     : path.join(inner, "data");
   const dbFile = path.join(dataDir, "db", "data.sqlite");
-  if (!fs.existsSync(dbFile)) return;
+  if (!fs.existsSync(dbFile)) return false;
 
   let DatabaseSync;
   try {
     ({ DatabaseSync } = require("node:sqlite"));
   } catch {
     console.log("[bootstrap] node:sqlite unavailable, skipping db patch");
-    return;
+    return true;
   }
 
+  let db;
   try {
-    const db = new DatabaseSync(dbFile);
+    db = new DatabaseSync(dbFile);
     const cols = db
       .prepare("PRAGMA table_info(apiKeys)")
       .all()
       .map((r) => r.name);
-    if (!cols.length) {
-      db.close();
-      return;
-    }
+    if (!cols.length) return false;
     if (!cols.includes("createdBy")) {
       db.exec("ALTER TABLE apiKeys ADD COLUMN createdBy TEXT DEFAULT ''");
       console.log("[bootstrap] patched apiKeys.createdBy");
-    } else {
-      console.log("[bootstrap] apiKeys.createdBy already present");
     }
-    db.close();
+    return true;
   } catch (err) {
-    console.log(`[bootstrap] db patch skipped: ${err.message}`);
+    return false;
+  } finally {
+    try {
+      db?.close();
+    } catch {}
   }
+}
+
+function scheduleDbPatch() {
+  if (patchOnce()) return;
+  let attempts = 0;
+  const timer = setInterval(() => {
+    attempts += 1;
+    if (patchOnce() || attempts >= 60) {
+      clearInterval(timer);
+      if (attempts >= 60) {
+        console.log("[bootstrap] db patch gave up after 60 attempts");
+      }
+    }
+  }, 1000);
+  timer.unref();
 }
 
 function rebuild() {
@@ -111,6 +127,6 @@ if (!fs.existsSync(startScript)) {
   process.exit(1);
 }
 
-patchDatabase();
+scheduleDbPatch();
 
 require(startScript);

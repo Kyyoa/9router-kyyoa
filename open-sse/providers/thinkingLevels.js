@@ -36,6 +36,12 @@ const CODEX_GPT_5_6_LEVELS = ["none", "minimal", "low", "medium", "high", "xhigh
 
 // Model-name pattern overrides (glob, first match wins) — more precise than format default.
 const PATTERN_THINKING = [
+  { provider: "zcode", pattern: "*glm-5.3-flash*", levels: ["low", "high", "max"] },
+  { provider: "zcode", pattern: "*glm-5.3*", levels: ["low", "high", "max"] },
+  { provider: "zcode", pattern: "*glm-5.2*", levels: ["none", "high", "max"] },
+  { provider: "zc", pattern: "*glm-5.3-flash*", levels: ["low", "high", "max"] },
+  { provider: "zc", pattern: "*glm-5.3*", levels: ["low", "high", "max"] },
+  { provider: "zc", pattern: "*glm-5.2*", levels: ["none", "high", "max"] },
   { provider: "codex", pattern: "*gpt-6*", levels: CODEX_GPT_5_6_LEVELS },
   { provider: "codex", pattern: "*gpt-5.6-sol*", levels: [...CODEX_GPT_5_6_LEVELS, "ultra"] },
   { provider: "codex", pattern: "*gpt-5.6-terra*", levels: [...CODEX_GPT_5_6_LEVELS, "ultra"] },

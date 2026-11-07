@@ -324,6 +324,13 @@ export const PROVIDER_CAPABILITIES = {
 // Qoder CN serves the identical model catalog from the CN gateway, so it shares
 // the intl Qoder capability table verbatim (vision/reasoning/contextWindow).
 PROVIDER_CAPABILITIES["qoder-cn"] = PROVIDER_CAPABILITIES["qoder"];
+PROVIDER_CAPABILITIES["zcode"] = {
+  "GLM-5.3-Flash": { vision: true, videoInput: true, pdf: true, reasoning: true, thinkingFormat: "zai-anthropic", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 128000 },
+  "GLM-5.3":       { reasoning: true, thinkingFormat: "zai-anthropic", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 128000 },
+  "GLM-5.2":       { reasoning: true, thinkingFormat: "zai-anthropic", thinkingCanDisable: true, contextWindow: 1000000, maxOutput: 128000 },
+  "GLM-5-Turbo":   { reasoning: true, thinkingFormat: "claude-budget", thinkingCanDisable: true, contextWindow: 1000000, maxOutput: 128000 },
+};
+PROVIDER_CAPABILITIES.zc = PROVIDER_CAPABILITIES["zcode"];
 PROVIDER_CAPABILITIES.cx = PROVIDER_CAPABILITIES.codex;
 PROVIDER_CAPABILITIES.dv = PROVIDER_CAPABILITIES["devin-cli"];
 PROVIDER_CAPABILITIES.devin = PROVIDER_CAPABILITIES["devin-cli"];

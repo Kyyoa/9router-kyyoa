@@ -57,6 +57,13 @@ const COOLDOWN = {
  *   - backoff: true = use exponential backoff (rate limit)
  */
 export const ERROR_RULES = [
+  // --- Antigravity fatal account state rules ---
+  { provider: "antigravity", text: "TOS_VIOLATION", cooldownMs: COOLDOWN.long, lock: true },
+  { provider: "antigravity", text: "ACCOUNT_STATE_INVALID", cooldownMs: COOLDOWN.long, lock: true },
+  { provider: "antigravity", text: "RESTRICTED_AGE", cooldownMs: COOLDOWN.long, lock: true },
+  { provider: "antigravity", text: "VALIDATION_REQUIRED", cooldownMs: COOLDOWN.long, lock: true },
+  { provider: "antigravity", text: "User location is not supported", cooldownMs: COOLDOWN.long, lock: true },
+
   // --- Text-based rules (checked first, order = priority) ---
   { provider: "codex", text: "model is not supported when using codex with a chatgpt account", cooldownMs: MAX_RATE_LIMIT_COOLDOWN_MS },
   { text: "no credentials",           cooldownMs: COOLDOWN.long },

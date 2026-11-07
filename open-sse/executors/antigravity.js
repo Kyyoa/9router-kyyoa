@@ -116,6 +116,14 @@ export class AntigravityExecutor extends BaseExecutor {
   }
 
   // Parse Antigravity quota error to extract precise resetsAtMs from ErrorInfo/RetryInfo
+  // 403 (e.g. Google UberProxy HTML block page) is account/edge-level and
+  // identical across all Antigravity mirror hosts - cycling the 3 sandbox
+  // mirrors only adds ~90s of pointless retries. Veto fallback on 403.
+  shouldRetry(status, urlIndex) {
+    if (status === 403) return false;
+    return status === HTTP_STATUS.RATE_LIMITED && urlIndex + 1 < this.getFallbackCount();
+  }
+
   parseError(response, bodyText) {
     if ((response.status === 429 || response.status === 409) && bodyText) {
       try {
@@ -146,6 +154,15 @@ export class AntigravityExecutor extends BaseExecutor {
           return { status: response.status, message: err?.message || bodyText, resetsAtMs };
         }
       } catch { /* fall through to default */ }
+    }
+    // Google edge (UberProxy) block page: raw HTML is useless to clients -
+    // surface a clean, actionable message instead of a 14KB HTML blob.
+    if (response.status === 403 && typeof bodyText === "string" && (bodyText.includes("UberProxy") || bodyText.includes("&Uuml;berProxy") || bodyText.includes("berProxy: Error 403"))) {
+      return {
+        status: 403,
+        message: "Google edge blocked this account/IP (UberProxy 403). Wait, switch egress IP/proxy, or re-auth the account.",
+        code: "UPSTREAM_BLOCKED",
+      };
     }
     return super.parseError(response, bodyText);
   }

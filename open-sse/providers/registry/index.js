@@ -133,6 +133,7 @@ import p129 from "./dahl.js";
 import p130 from "./tinyfish.js";
 import p131 from "./tokenharbor.js";
 import p132 from "./v1m.js";
+import p154 from "./zcode.js";
 export default [
   p0,
   p1,
@@ -266,4 +267,5 @@ export default [
   p130,
   p131,
   p132,
+  p154,
 ];

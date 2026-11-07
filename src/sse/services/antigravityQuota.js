@@ -50,6 +50,95 @@ function applyActiveStrikeBlocks(connectionId, quotas) {
 }
 
 /**
+ * Get model family for Antigravity models ("claude_gpt", "gemini_argon", or "gemini").
+ */
+export function getAntigravityModelFamily(model) {
+  if (!model || typeof model !== "string") return null;
+  const clean = model.replace(/^ag\//, "").trim().toLowerCase();
+  if (clean.startsWith("claude-") || clean.startsWith("gpt-") || clean === "claude") {
+    return "claude_gpt";
+  }
+  if ((clean.startsWith("gemini-") && clean.includes("argon")) || clean === "gemini_argon") {
+    return "gemini_argon";
+  }
+  if ((clean.startsWith("gemini-") && !clean.includes("image")) || clean === "gemini") {
+    return "gemini";
+  }
+  return null;
+}
+
+/**
+ * Resolve effective quota for a specific model from the full quotas map.
+ * Checks per-model entry, model tier aliases, and family summary/weekly quotas.
+ */
+export function getAntigravityModelQuota(quotas, model) {
+  if (!quotas || typeof quotas !== "object" || !model) return null;
+  const cleanModel = model.replace(/^ag\//, "").trim();
+
+  const candidates = [];
+
+  // 1. Exact model match
+  if (quotas[cleanModel]) {
+    candidates.push(quotas[cleanModel]);
+  }
+
+  // 2. Direct tier aliases if base model was passed
+  if (cleanModel === "gemini-4-argon" && quotas["gemini-4-argon-high"]) {
+    candidates.push(quotas["gemini-4-argon-high"]);
+  }
+  if (cleanModel === "claude-sonnet-5-5" && quotas["claude-sonnet-5-5-high"]) {
+    candidates.push(quotas["claude-sonnet-5-5-high"]);
+  }
+  if (cleanModel === "claude-opus-4-6" && quotas["claude-opus-4-6-thinking"]) {
+    candidates.push(quotas["claude-opus-4-6-thinking"]);
+  }
+  if (cleanModel === "claude-sonnet-4-6" && quotas["claude-sonnet-4-6-thinking"]) {
+    candidates.push(quotas["claude-sonnet-4-6-thinking"]);
+  }
+  if (cleanModel === "claude-haiku-4-5" && quotas["claude-haiku-4-5-thinking"]) {
+    candidates.push(quotas["claude-haiku-4-5-thinking"]);
+  }
+  if (cleanModel === "gemini-3.8-flash" && quotas["gemini-3.8-flash-high"]) {
+    candidates.push(quotas["gemini-3.8-flash-high"]);
+  }
+  if (cleanModel === "gemini-3.8-pro" && quotas["gemini-3.8-pro-high"]) {
+    candidates.push(quotas["gemini-3.8-pro-high"]);
+  }
+
+  // 3. Family rolling session and weekly limit
+  const family = getAntigravityModelFamily(cleanModel);
+  if (family === "claude_gpt") {
+    if (quotas.claude_gpt_session) candidates.push(quotas.claude_gpt_session);
+    if (quotas.claude_gpt_weekly) candidates.push(quotas.claude_gpt_weekly);
+  } else if (family === "gemini_argon") {
+    if (quotas.gemini_argon_session) candidates.push(quotas.gemini_argon_session);
+    if (quotas.gemini_argon_weekly) candidates.push(quotas.gemini_argon_weekly);
+    // On Ultra plans where Argon shares the main Gemini bucket (no separate argon summary),
+    // fall back to the shared Gemini summary buckets.
+    if (!quotas.gemini_argon_session && !quotas.gemini_argon_weekly) {
+      if (quotas.gemini_session) candidates.push(quotas.gemini_session);
+      if (quotas.gemini_weekly) candidates.push(quotas.gemini_weekly);
+    }
+  } else if (family === "gemini") {
+    if (quotas.gemini_session) candidates.push(quotas.gemini_session);
+    if (quotas.gemini_weekly) candidates.push(quotas.gemini_weekly);
+  }
+
+  if (candidates.length === 0) return null;
+
+  // An exhausted candidate (0% remaining with future reset) takes absolute precedence
+  const exhausted = candidates.find(
+    q => q.remainingPercentage <= 0 && q.resetAt && new Date(q.resetAt).getTime() > Date.now()
+  );
+  if (exhausted) return exhausted;
+
+  // Otherwise return the candidate with the least remaining percentage
+  return candidates.reduce((min, cur) =>
+    (cur.remainingPercentage ?? 100) < (min.remainingPercentage ?? 100) ? cur : min
+  );
+}
+
+/**
  * Clear strike state for a connection|model after a successful request, so
  * "consecutive" strikes means consecutive. Only removes a synthesized cache
  * entry (resetAt == our block deadline); a real upstream 0% reading stays.
@@ -61,9 +150,18 @@ export function clearAntigravityStrikes(connectionId, model) {
   if (until === undefined) return;
   strikeBlocks.delete(key);
   const cached = quotaCache.get(connectionId);
-  if (cached?.[model]?.resetAt === new Date(until).toISOString()) {
+  const iso = new Date(until).toISOString();
+  if (cached?.[model]?.resetAt === iso) {
     delete cached[model];
     quotaCache.set(connectionId, cached);
+  }
+  const family = getAntigravityModelFamily(model);
+  if (family === "claude_gpt" && cached?.claude_gpt_session?.resetAt === iso) {
+    delete cached.claude_gpt_session;
+  } else if (family === "gemini_argon" && cached?.gemini_argon_session?.resetAt === iso) {
+    delete cached.gemini_argon_session;
+  } else if (family === "gemini" && cached?.gemini_session?.resetAt === iso) {
+    delete cached.gemini_session;
   }
 }
 
@@ -140,7 +238,8 @@ export async function handleAntigravityQuotaError(connectionId, status, model, a
 
   // Throttle applies to error paths too: one quota request per account/30s.
   // The first 409/429 populates cache; concurrent or repeated errors reuse it.
-  const quota = (await refreshAntigravityQuota(connectionId, accessToken, providerSpecificData))?.[model];
+  const quotas = await refreshAntigravityQuota(connectionId, accessToken, providerSpecificData);
+  const quota = getAntigravityModelQuota(quotas, model);
 
   // Strike breaker: count every 429 whose quota reading is either optimistic
   // (remaining > 0) or unavailable (quota API 403/error). 3 within the window

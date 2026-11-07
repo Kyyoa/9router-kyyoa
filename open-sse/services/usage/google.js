@@ -232,8 +232,23 @@ export async function getAntigravityUsage(accessToken, providerSpecificData, pro
       // If every model in a family is locked/exhausted (remainingPercentage === 0)
       // until a future reset time, update the 5h session row (not the weekly row).
       const entries = Object.entries(quotas);
-      const geminiModels = entries.filter(([k]) => k.startsWith("gemini-") && !k.includes("image"));
+      const argonModels = entries.filter(([k]) => k.startsWith("gemini-") && k.includes("argon"));
+      const geminiModels = entries.filter(([k]) => k.startsWith("gemini-") && !k.includes("image") && !k.includes("argon"));
       const claudeModels = entries.filter(([k]) => k.startsWith("claude-"));
+
+      if (weeklyQuotas.gemini_argon_session && argonModels.length > 0) {
+        const allArgonExhausted = argonModels.every(([, q]) => (q.remainingPercentage ?? 0) === 0);
+        if (allArgonExhausted && weeklyQuotas.gemini_argon_session.remainingPercentage > 0) {
+          const maxResetAt = argonModels.reduce((max, [, q]) =>
+            !max || (q.resetAt && new Date(q.resetAt) > new Date(max)) ? q.resetAt : max, null
+          );
+          weeklyQuotas.gemini_argon_session.used = weeklyQuotas.gemini_argon_session.total;
+          weeklyQuotas.gemini_argon_session.remainingPercentage = 0;
+          if (maxResetAt) {
+            weeklyQuotas.gemini_argon_session.resetAt = maxResetAt;
+          }
+        }
+      }
 
       if (weeklyQuotas.gemini_session && geminiModels.length > 0) {
         const allGeminiExhausted = geminiModels.every(([, q]) => (q.remainingPercentage ?? 0) === 0);
@@ -246,6 +261,22 @@ export async function getAntigravityUsage(accessToken, providerSpecificData, pro
           if (maxResetAt) {
             weeklyQuotas.gemini_session.resetAt = maxResetAt;
           }
+        }
+      } else if (!weeklyQuotas.gemini_session && geminiModels.length > 0) {
+        // Antigravity Pro accounts: upstream Cloud API only provides weekly bucket for Gemini.
+        // Synthesize Gemini (5h) rolling session from models or lowest quota, matching Antigravity SDK.
+        const rep = geminiModels.reduce((min, cur) =>
+          (cur[1].remainingPercentage ?? 100) < (min[1].remainingPercentage ?? 100) ? cur : min
+        )[1];
+        if (rep) {
+          weeklyQuotas.gemini_session = {
+            used: rep.used || 0,
+            total: rep.total || 1000,
+            resetAt: rep.resetAt || null,
+            remainingPercentage: rep.remainingPercentage ?? 100,
+            unlimited: false,
+            displayName: "Gemini (5h)",
+          };
         }
       }
 

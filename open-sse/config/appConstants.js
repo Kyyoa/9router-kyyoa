@@ -159,17 +159,21 @@ export const LOAD_CODE_ASSIST_HEADERS = {
   "Client-Metadata": JSON.stringify({ ideType: IDE_TYPE.ANTIGRAVITY, platform: getPlatformEnum(), pluginType: PLUGIN_TYPE.GEMINI }),
 };
 
-// Real Antigravity IDE doesn't send X-Goog-Api-Client/Client-Metadata on loadCodeAssist/onboardUser —
-// Google's backend fingerprints those and silently refuses to provision a cloudaicompanionProject.
 export const ANTIGRAVITY_LOAD_CODE_ASSIST_HEADERS = {
   "Content-Type": "application/json",
-  "User-Agent": ANTIGRAVITY_IDE_USER_AGENT,
+  "Accept": "*/*",
+  "User-Agent": "antigravity/1.107.0 windows/amd64",
+  "Client-Metadata": JSON.stringify({
+    ideType: "ANTIGRAVITY",
+    platform: "PLATFORM_UNSPECIFIED",
+    pluginType: "GEMINI",
+  }),
 };
 
 export const LOAD_CODE_ASSIST_METADATA = {
-  ideType: IDE_TYPE.ANTIGRAVITY,
-  platform: getPlatformEnum(),
-  pluginType: PLUGIN_TYPE.GEMINI,
+  ideType: "ANTIGRAVITY",
+  platform: "PLATFORM_UNSPECIFIED",
+  pluginType: "GEMINI",
 };
 
 // System prompts

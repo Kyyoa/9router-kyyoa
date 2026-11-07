@@ -20,7 +20,7 @@ import { getGroqUsage } from "./usage/groq.js";
 import { getZedUsage } from "./usage/zed.js";
 import { getXiaomiMimoUsage } from "./usage/xiaomi-mimo.js";
 import { resolveQoderCredentials } from "./qoderModels.js";
-import { getGlmUsage } from "./usage/glm.js";
+import { getGlmUsage, getGlmResetCards, redeemGlmResetCard, getGlmClaimablePlans, claimGlmPlan, getGlmBalance, checkAndClaimZcodeStartPlan, ZCODE_START_PLAN_ID } from "./usage/glm.js";
 import { getCommandCodeUsage } from "./usage/commandcode.js";
 import {
   getIflowUsage,
@@ -46,8 +46,8 @@ const USAGE_HANDLERS = {
   "qoder-cn": (c) => getQoderUsageFor(c),
   iflow: (c) => getIflowUsage(c.accessToken),
   ollama: (c) => getOllamaUsage(c.apiKey, c.providerSpecificData, c.proxyOptions),
-  glm: (c) => getGlmUsage(c.apiKey, c.provider, c.proxyOptions),
-  "glm-cn": (c) => getGlmUsage(c.apiKey, c.provider, c.proxyOptions),
+  glm: (c) => getGlmUsage(c.apiKey || c.accessToken, c.provider, c.proxyOptions, c.providerSpecificData),
+  "glm-cn": (c) => getGlmUsage(c.apiKey || c.accessToken, c.provider, c.proxyOptions, c.providerSpecificData),
   minimax: (c) => getMiniMaxUsage(c.apiKey, c.provider, c.proxyOptions),
   "minimax-cn": (c) => getMiniMaxUsage(c.apiKey, c.provider, c.proxyOptions),
   "vercel-ai-gateway": (c) => getVercelAiGatewayUsage(c.apiKey, c.proxyOptions),
@@ -83,6 +83,7 @@ export async function getUsageForProvider(connection, proxyOptions = null, optio
   if (!handler) return { message: `Usage API not implemented for ${provider}` };
   return await handler({
     provider,
+    connectionId: connection.id,
     accessToken,
     apiKey,
     providerSpecificData,
@@ -91,3 +92,5 @@ export async function getUsageForProvider(connection, proxyOptions = null, optio
     force: options.force === true,
   });
 }
+
+export { getGlmResetCards, redeemGlmResetCard, getGlmClaimablePlans, claimGlmPlan, getGlmBalance, checkAndClaimZcodeStartPlan, ZCODE_START_PLAN_ID };

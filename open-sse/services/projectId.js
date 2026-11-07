@@ -107,10 +107,10 @@ export async function getProjectIdForConnection(connectionId, accessToken, provi
                 projectIdCache.set(connectionId, {projectId, fetchedAt: Date.now()});
                 return projectId;
             }
-            console.warn("[ProjectId] could not fetch projectId for connection", connectionId.slice(0, 8));
+            console.warn("[ProjectId] could not provision projectId on Google server for connection", connectionId.slice(0, 8));
             return null;
         } catch (error) {
-            console.warn(`[ProjectId] Error fetching project ID: ${error.message}`);
+            console.warn(`[ProjectId] Error provisioning project ID on Google server: ${error.message}`);
             return null;
         } finally {
             pendingFetches.delete(connectionId);
@@ -171,11 +171,11 @@ async function fetchProjectId(accessToken, signal, provider) {
     }
 
     const data = await response.json();
-    const projectId = extractProjectId(data);
+    let projectId = extractProjectId(data);
     if (projectId) return projectId;
 
     // Determine the tier to use for onboarding
-    let tierID = "legacy-tier";
+    let tierID = "free-tier";
     if (Array.isArray(data.allowedTiers)) {
         for (const tier of data.allowedTiers) {
             if (tier && typeof tier === "object" && tier.isDefault === true) {
@@ -187,7 +187,26 @@ async function fetchProjectId(accessToken, signal, provider) {
         }
     }
 
-    return onboardUser(accessToken, tierID, signal, endpoints, provider);
+    // Call Google's onboardUser endpoint to trigger project creation on Google's servers
+    const onboardPid = await onboardUser(accessToken, tierID, signal, endpoints, provider);
+    if (onboardPid) return onboardPid;
+
+    // Once onboarding request has gone through, re-query loadCodeAssist to fetch the provisioned project ID from Google's server
+    try {
+        const reloadRes = await fetch(endpoints.loadCodeAssist, {
+            method: "POST",
+            headers: { ...headers, "Authorization": `Bearer ${accessToken}` },
+            body: JSON.stringify({ metadata: LOAD_CODE_ASSIST_METADATA }),
+            signal
+        });
+        if (reloadRes.ok) {
+            const reloadData = await reloadRes.json();
+            const reloadedPid = extractProjectId(reloadData);
+            if (reloadedPid) return reloadedPid;
+        }
+    } catch {}
+
+    return null;
 }
 
 /**
@@ -201,70 +220,70 @@ async function fetchProjectId(accessToken, signal, provider) {
 async function onboardUser(accessToken, tierID, externalSignal, endpoints, provider) {
     console.log(`[ProjectId] Onboarding user with tier: ${tierID}`);
 
-    const reqBody = { tierId: tierID, metadata: LOAD_CODE_ASSIST_METADATA };
+    const reqBody = {
+        tierId: tierID || "free-tier",
+        tier_id: tierID || "free-tier",
+        metadata: {
+            ideType: "ANTIGRAVITY",
+            ide_type: "ANTIGRAVITY",
+            ideName: "antigravity",
+            ide_name: "antigravity",
+            ideVersion: "1.107.0",
+            ide_version: "1.107.0",
+            ...LOAD_CODE_ASSIST_METADATA,
+        }
+    };
     const headers = provider === "antigravity" ? ANTIGRAVITY_LOAD_CODE_ASSIST_HEADERS : LOAD_CODE_ASSIST_HEADERS;
-    const MAX_ATTEMPTS = Number(process.env.ONBOARD_MAX_ATTEMPTS) || 2;
-    const BASE_RETRY_DELAY_MS = Number(process.env.ONBOARD_RETRY_DELAY_MS) || 12_000;
+    const MAX_ATTEMPTS = Number(process.env.ONBOARD_MAX_ATTEMPTS) || 6;
+    const BASE_RETRY_DELAY_MS = 2_000;
+
+    const targetUrls = [
+        "https://daily-cloudcode-pa.googleapis.com/v1internal:onboardUser",
+        "https://cloudcode-pa.googleapis.com/v1internal:onboardUser",
+    ];
 
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-        // Bail out immediately if the connection was removed
         if (externalSignal?.aborted) return null;
 
-        // Per-attempt timeout controller; forwards external abort as well
-        const localCtrl = new AbortController();
-        const timeoutId = setTimeout(() => localCtrl.abort(), 30_000);
-        const forwardAbort = () => localCtrl.abort();
-        externalSignal?.addEventListener("abort", forwardAbort);
+        for (const url of targetUrls) {
+            const localCtrl = new AbortController();
+            const timeoutId = setTimeout(() => localCtrl.abort(), 15_000);
+            const forwardAbort = () => localCtrl.abort();
+            externalSignal?.addEventListener("abort", forwardAbort);
 
-        try {
-            const response = await fetch(endpoints.onboardUser, {
-                method: "POST",
-                headers: { ...headers, "Authorization": `Bearer ${accessToken}` },
-                body: JSON.stringify(reqBody),
-                signal: localCtrl.signal
-            });
+            try {
+                const response = await fetch(url, {
+                    method: "POST",
+                    headers: { ...headers, "Authorization": `Bearer ${accessToken}` },
+                    body: JSON.stringify(reqBody),
+                    signal: localCtrl.signal
+                });
 
-            clearTimeout(timeoutId);
+                clearTimeout(timeoutId);
 
-            if (!response.ok) {
-                const errorText = await response.text().catch(() => "");
-                throw new Error(`onboardUser HTTP ${response.status}: ${errorText.slice(0, 200)}`);
-            }
-
-            const data = await response.json();
-
-            if (data.done === true) {
-                const projectId = extractProjectIdFromOnboard(data);
-                if (projectId) {
-                    console.log(`[ProjectId] Successfully onboarded, project ID: ${projectId}`);
-                    return projectId;
+                if (response.ok) {
+                    const data = await response.json().catch(() => null);
+                    if (data) {
+                        const projectId = extractProjectId(data);
+                        if (projectId) {
+                            console.log(`[ProjectId] Successfully onboarded on Google server, project ID: ${projectId}`);
+                            return projectId;
+                        }
+                        if (data.done === true) {
+                            return null;
+                        }
+                    }
                 }
-                throw new Error("onboardUser done but no project_id in response");
+            } catch (err) {
+                clearTimeout(timeoutId);
+            } finally {
+                clearTimeout(timeoutId);
+                externalSignal?.removeEventListener("abort", forwardAbort);
             }
+        }
 
-            // Server not done yet – wait and retry with jitter
-            const jitter = Math.floor(Math.random() * 5000);
-            console.log(`[ProjectId] Onboard attempt ${attempt}/${MAX_ATTEMPTS}: not done yet, waiting...`);
-            await new Promise(resolve => setTimeout(resolve, BASE_RETRY_DELAY_MS + jitter));
-
-        } catch (error) {
-            clearTimeout(timeoutId);
-            if (error.name === "AbortError") {
-                console.warn(`[ProjectId] onboardUser attempt ${attempt} aborted (timeout or connection removed)`);
-                if (externalSignal?.aborted) return null;   // connection gone – stop retrying
-                continue;
-            }
-            if (attempt === MAX_ATTEMPTS) {
-                console.warn(`[ProjectId] onboardUser failed after ${MAX_ATTEMPTS} attempts: ${error.message}`);
-                return null;
-            }
-            // Wait with jitter before retrying
-            const jitter = Math.floor(Math.random() * 5000);
-            console.warn(`[ProjectId] onboardUser attempt ${attempt} failed: ${error.message}, retrying...`);
-            await new Promise(resolve => setTimeout(resolve, BASE_RETRY_DELAY_MS + jitter));
-        } finally {
-            clearTimeout(timeoutId);
-            externalSignal?.removeEventListener("abort", forwardAbort);
+        if (attempt < MAX_ATTEMPTS) {
+            await new Promise(resolve => setTimeout(resolve, BASE_RETRY_DELAY_MS));
         }
     }
 
@@ -272,40 +291,19 @@ async function onboardUser(accessToken, tierID, externalSignal, endpoints, provi
 }
 
 /**
- * Extract project ID from loadCodeAssist response.
+ * Extract project ID from loadCodeAssist or onboardUser response.
  */
 function extractProjectId(data) {
-    if (!data) return null;
+    if (!data || typeof data !== "object") return null;
 
-    if (typeof data.cloudaicompanionProject === "string") {
-        const id = data.cloudaicompanionProject.trim();
-        if (id) return id;
+    for (const key of ["cloudaicompanionProject", "projectId", "project"]) {
+        const val = data[key];
+        if (typeof val === "string" && val.trim()) return val.trim();
+        if (val && typeof val === "object" && typeof val.id === "string" && val.id.trim()) return val.id.trim();
     }
 
-    if (data.cloudaicompanionProject && typeof data.cloudaicompanionProject === "object") {
-        const id = data.cloudaicompanionProject.id;
-        if (typeof id === "string" && id.trim()) return id.trim();
-    }
-
-    return null;
-}
-
-/**
- * Extract project ID from onboardUser response.
- */
-function extractProjectIdFromOnboard(data) {
-    if (!data?.response) return null;
-
-    const project = data.response.cloudaicompanionProject;
-
-    if (typeof project === "string") {
-        const id = project.trim();
-        if (id) return id;
-    }
-
-    if (project && typeof project === "object") {
-        const id = project.id;
-        if (typeof id === "string" && id.trim()) return id.trim();
+    if (data.response && typeof data.response === "object") {
+        return extractProjectId(data.response);
     }
 
     return null;

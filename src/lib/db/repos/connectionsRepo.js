@@ -248,6 +248,69 @@ export async function deleteProviderConnectionsByProvider(providerId) {
   return before?.n || 0;
 }
 
+export async function bulkCreateProviderConnections(provider, keys = []) {
+  const db = await getAdapter();
+  const now = new Date().toISOString();
+  const created = [];
+  const failed = [];
+
+  db.transaction(() => {
+    const existingRows = db.all(
+      `SELECT * FROM providerConnections WHERE provider = ? AND authType = 'apikey'`,
+      [provider]
+    ).map(rowToConn);
+    const existingByName = new Map(existingRows.map(r => [r.name, r]));
+
+    const maxRow = db.get(`SELECT MAX(priority) AS m FROM providerConnections WHERE provider = ?`, [provider]);
+    let nextPriority = (maxRow?.m || 0) + 1;
+
+    for (let i = 0; i < keys.length; i++) {
+      const entry = keys[i];
+      const apiKey = String(entry.apiKey || "").trim();
+      const name = String(entry.name || `Key ${i + 1}`).trim();
+      if (!apiKey) {
+        failed.push({ index: i, error: "Empty API key" });
+        continue;
+      }
+
+      try {
+        const existing = existingByName.get(name);
+        if (existing) {
+          const normalized = resetHealthStateOnActivation(existing, {
+            apiKey,
+            providerSpecificData: entry.providerSpecificData || {},
+          });
+          const merged = { ...existing, ...normalized, updatedAt: now };
+          upsert(db, merged);
+          existingByName.set(name, merged);
+          created.push(merged.id);
+        } else {
+          const conn = {
+            id: uuidv4(),
+            provider,
+            authType: "apikey",
+            name,
+            apiKey,
+            priority: nextPriority++,
+            isActive: true,
+            testStatus: "unknown",
+            providerSpecificData: entry.providerSpecificData || {},
+            createdAt: now,
+            updatedAt: now,
+          };
+          upsert(db, conn);
+          existingByName.set(name, conn);
+          created.push(conn.id);
+        }
+      } catch (err) {
+        failed.push({ index: i, error: err?.message || "Failed to create" });
+      }
+    }
+  });
+
+  return { created, failed };
+}
+
 export async function reorderProviderConnections(providerId) {
   const db = await getAdapter();
   db.transaction(() => reorderInTx(db, providerId));

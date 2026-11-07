@@ -131,6 +131,43 @@ function normalizeString(value) {
   return String(value).trim();
 }
 
+const OPENCODE_V6_CACHE = new Map();
+
+/**
+ * Resolve OpenCode real AAAA records via DoH (Cloudflare 1.1.1.1 / Google 8.8.8.8)
+ * to bypass IPv4 DNS hijacking and 403 FreeTierError (from Ashineqq/opencode2api).
+ */
+export async function resolveOpencodeIPv6(hostname) {
+  const cached = OPENCODE_V6_CACHE.get(hostname);
+  if (cached && Date.now() < cached.expiry) return cached.ips;
+
+  const endpoints = [
+    `https://1.1.1.1/dns-query?name=${encodeURIComponent(hostname)}&type=AAAA`,
+    `https://8.8.8.8/resolve?name=${encodeURIComponent(hostname)}&type=AAAA`,
+  ];
+
+  for (const ep of endpoints) {
+    try {
+      const res = await originalFetch(ep, {
+        headers: { "accept": "application/dns-json" },
+        signal: AbortSignal.timeout(3000),
+      });
+      if (!res.ok) continue;
+      const data = await res.json();
+      if (data?.Status === 0 && Array.isArray(data.Answer)) {
+        const ips = data.Answer.filter((a) => a.type === 28 && a.data).map((a) => a.data);
+        if (ips.length > 0) {
+          OPENCODE_V6_CACHE.set(hostname, { ips, expiry: Date.now() + 4 * 60 * 1000 });
+          return ips;
+        }
+      }
+    } catch {
+      // try next
+    }
+  }
+  return null;
+}
+
 /**
  * Resolve real IP using Google DNS (bypass system DNS)
  */

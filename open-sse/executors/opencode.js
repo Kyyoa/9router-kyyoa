@@ -61,6 +61,12 @@ function descendingTimeHex(time, counterValue) {
     .padStart(12, "0");
 }
 
+// Generates a fresh 40-hex git-commit-shaped project ID (the free tier ledges quota
+// per project ID, so rotating project IDs prevents hitting static account rate limits).
+export function generateRandomProjectId() {
+  return crypto.randomBytes(20).toString("hex");
+}
+
 export function generateSessionId(timestamp = Date.now()) {
   if (timestamp !== lastTimestamp) {
     lastTimestamp = timestamp;
@@ -407,10 +413,40 @@ export class OpenCodeExecutor extends BaseExecutor {
       "x-opencode-session-id": session,
       "x-session-affinity": session,
       "x-session-id": session,
-      "x-opencode-project": lower["x-opencode-project"] || "global",
+      "x-opencode-project": lower["x-opencode-project"] || generateRandomProjectId(),
       "Accept": stream ? "text/event-stream" : "*/*",
     };
     if (url.endsWith("/messages")) headers["anthropic-version"] = ANTHROPIC_API_VERSION;
     return headers;
+  }
+
+  // Parse OpenCode FreeUsageLimitError / rate-limiting headers to extract resetsAtMs
+  parseError(response, bodyText) {
+    if (response.status === 429 && bodyText) {
+      try {
+        const json = JSON.parse(bodyText);
+        const err = json?.error;
+        const now = Date.now();
+        let resetsAtMs = null;
+        if (typeof err?.resets_at === "number" && err.resets_at > 0) {
+          const ms = err.resets_at * 1000;
+          if (ms > now) resetsAtMs = ms;
+        }
+        if (!resetsAtMs && typeof err?.resets_in_seconds === "number" && err.resets_in_seconds > 0) {
+          resetsAtMs = now + err.resets_in_seconds * 1000;
+        }
+        const retryHeader = response.headers?.get?.("retry-after");
+        if (!resetsAtMs && retryHeader) {
+          const sec = Number.parseInt(retryHeader, 10);
+          if (Number.isFinite(sec) && sec > 0) {
+            resetsAtMs = now + sec * 1000;
+          }
+        }
+        if (resetsAtMs) {
+          return { status: 429, message: err?.message || bodyText, resetsAtMs };
+        }
+      } catch {}
+    }
+    return super.parseError(response, bodyText);
   }
 }

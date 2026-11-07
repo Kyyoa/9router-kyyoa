@@ -13,6 +13,19 @@ const origCreate = http.createServer.bind(http);
 const PEER_TOKEN = crypto.randomBytes(24).toString("hex");
 process.env.NINEROUTER_PEER_TOKEN = PEER_TOKEN;
 
+// Aggressive memory optimizer for low-spec environments (1GB RAM VPS / 512MB containers)
+if (typeof globalThis.gc === "function") {
+  setInterval(() => {
+    try {
+      const mem = process.memoryUsage();
+      // If heap exceeds 300MB, trigger V8 manual garbage collection to return pages to the OS
+      if (mem.heapUsed > 300 * 1024 * 1024) {
+        globalThis.gc();
+      }
+    } catch {}
+  }, 60000).unref();
+}
+
 let backgroundRefreshStarted = false;
 
 // Arm the automatic-backup scheduler as soon as the HTTP server is listening.

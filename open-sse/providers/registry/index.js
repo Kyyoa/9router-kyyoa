@@ -26,7 +26,6 @@ import p23 from "./coqui.js";
 import p24 from "./cursor.js";
 import p25 from "./deepgram.js";
 import p26 from "./deepseek.js";
-import p26b from "./deepseek-web.js";
 import p27 from "./edge-tts.js";
 import p28 from "./elevenlabs.js";
 import p29 from "./exa.js";
@@ -36,7 +35,6 @@ import p32 from "./firecrawl.js";
 import p33 from "./fireworks.js";
 import p34 from "./gemini-cli.js";
 import p35 from "./gemini.js";
-import p35b from "./gemini-web.js";
 import p36 from "./github.js";
 import p37 from "./gitlab.js";
 import p38 from "./glm-cn.js";
@@ -44,6 +42,7 @@ import p39 from "./glm.js";
 import p40 from "./google-pse.js";
 import p41 from "./google-tts.js";
 import p42 from "./grok-cli.js";
+import p43 from "./grok-web.js";
 import p44 from "./groq.js";
 import p45 from "./huggingface.js";
 import p46 from "./hyperbolic.js";
@@ -54,15 +53,14 @@ import p50 from "./jina-reader.js";
 import p51 from "./kilocode.js";
 import p52 from "./kimchi.js";
 import p53 from "./kimi.js";
-import p53b from "./kimi-web.js";
 import p54 from "./kiro.js";
 import p55 from "./linkup.js";
 import p56 from "./local-device.js";
-import p57 from "./mimocode.js";
+import p57 from "./mimo-free.js";
 import p58 from "./minimax-cn.js";
 import p59 from "./minimax.js";
 import p60 from "./mistral.js";
-import p125 from "./muse.js";
+import p61 from "./mmf.js";
 import p62 from "./nanobanana.js";
 import p63 from "./nebius.js";
 import p64 from "./nvidia.js";
@@ -74,6 +72,7 @@ import p68 from "./opencode-go.js";
 import p68z from "./opencode-zen.js";
 import p69 from "./opencode.js";
 import p70 from "./openrouter.js";
+import p71 from "./perplexity-web.js";
 import p72 from "./perplexity.js";
 import p73 from "./perplexity-agent.js";
 import p74 from "./playht.js";
@@ -86,6 +85,7 @@ import p80 from "./searchapi.js";
 import p81 from "./searxng.js";
 import p82 from "./serper.js";
 import p83 from "./siliconflow.js";
+import p139 from "./sensenova.js";
 import p84 from "./stability-ai.js";
 import p85 from "./tavily.js";
 import p86 from "./together.js";
@@ -126,14 +126,32 @@ import p119 from "./selfhosted-embedding.js";
 import p120 from "./fish-audio.js";
 import p121 from "./alitp-intl.js";
 import p122 from "./xquik.js";
-import p126 from "./agnes.js";
+import p125 from "./tokenharbor.js";
+import p126 from "./dahl.js";
 import p127 from "./atria.js";
-import p128 from "./bai.js";
-import p129 from "./dahl.js";
-import p130 from "./tinyfish.js";
-import p131 from "./tokenharbor.js";
+import p129 from "./agnes.js";
+import p130 from "./bai.js";
+import p131 from "./tinyfish.js";
 import p132 from "./v1m.js";
-import p154 from "./zcode.js";
+import p133 from "./muse.js";
+import p134 from "./minimax-code.js";
+import p135 from "./minimax-code-global.js";
+import p136 from "./bedrock.js";
+import p137 from "./bedrock-xai.js";
+import p138 from "./nous.js";
+import p140 from "./deepseek-web.js";
+import p143 from "./gemini-web.js";
+import p144 from "./muse-web.js";
+import p146 from "./chatgpt-web.js";
+import p147 from "./veoaifree-web.js";
+import p151 from "./uc-web.js";
+import p152 from "./runcrate.js";
+import p153 from "./nace.js";
+import p154 from "./sensenova-intl.js";
+import p155 from "./synthetic.js";
+import p156 from "./opendesign-go.js";
+import p157 from "./deeprelay.js";
+import p158 from "./qwencloud.js";
 export default [
   p0,
   p1,
@@ -162,7 +180,6 @@ export default [
   p24,
   p25,
   p26,
-  p26b,
   p27,
   p28,
   p29,
@@ -172,7 +189,6 @@ export default [
   p33,
   p34,
   p35,
-  p35b,
   p36,
   p37,
   p38,
@@ -180,6 +196,7 @@ export default [
   p40,
   p41,
   p42,
+  p43,
   p44,
   p45,
   p46,
@@ -190,7 +207,6 @@ export default [
   p51,
   p52,
   p53,
-  p53b,
   p54,
   p55,
   p56,
@@ -198,7 +214,7 @@ export default [
   p58,
   p59,
   p60,
-  p125,
+  p61,
   p62,
   p63,
   p64,
@@ -211,6 +227,7 @@ export default [
   p68z,
   p69,
   p70,
+  p71,
   p72,
   p73,
   p74,
@@ -222,6 +239,7 @@ export default [
   p81,
   p82,
   p83,
+  p139,
   p84,
   p85,
   p86,
@@ -260,12 +278,30 @@ export default [
   p120,
   p121,
   p122,
+  p125,
   p126,
   p127,
-  p128,
   p129,
   p130,
   p131,
   p132,
+  p133,
+  p134,
+  p135,
+  p136,
+  p137,
+  p138,
+  p140,
+  p143,
+  p144,
+  p146,
+  p147,
+  p151,
+  p152,
+  p153,
   p154,
+  p155,
+  p156,
+  p157,
+  p158,
 ];

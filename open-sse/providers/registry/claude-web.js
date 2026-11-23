@@ -1,0 +1,35 @@
+export default {
+  id: "claude-web",
+  priority: 144,
+  alias: "claude-web",
+  aliases: ["cw", "claude-cookie"],
+  uiAlias: "cw",
+  display: {
+    name: "Claude Web",
+    icon: "bolt",
+    color: "#D97706",
+    textIcon: "CW",
+    website: "https://claude.ai",
+    notice: {
+      apiKeyUrl: "https://claude.ai",
+    },
+  },
+  category: "webCookie",
+  authType: "cookie",
+  authHint: "Paste sessionKey dari claude.ai (Buka claude.ai -> F12 -> Application -> Storage -> Cookies -> claude.ai -> cari sessionKey, format: sessionKey=«redacted:sk-…»)",
+  transport: {
+    baseUrl: "https://claude.ai/api",
+    format: "openai",
+    authType: "cookie",
+    auth: { header: "Cookie", scheme: "raw" },
+  },
+  models: [
+    { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6 (web)" },
+    { id: "claude-sonnet-5", name: "Claude Sonnet 5 (web)" },
+    { id: "claude-opus-5", name: "Claude Opus 5 (web)" },
+    { id: "claude-fable-5-1", name: "Claude Fable 5.1 (web)" },
+    { id: "claude-3-5-sonnet", name: "Claude 3.5 Sonnet (web)" },
+    { id: "claude-3-5-haiku", name: "Claude 3.5 Haiku (web)" },
+  ],
+  passthroughModels: true,
+};

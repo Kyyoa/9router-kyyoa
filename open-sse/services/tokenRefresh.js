@@ -2,7 +2,6 @@ import { PROVIDERS } from "../config/providers.js";
 import { OAUTH_ENDPOINTS, REFRESH_LEAD_MS } from "../config/appConstants.js";
 import {
   refreshXaiToken,
-  refreshGrokCliToken,
   refreshAccessToken,
   refreshKimiToken,
   refreshClineToken,
@@ -18,13 +17,13 @@ import {
   refreshTraeToken,
   refreshZedToken,
   refreshWindsurfToken,
+  refreshMiniMaxCodeToken,
+  refreshNousToken,
   classifyOAuthRefreshError,
 } from "./tokenRefresh/providers.js";
 
 // Re-export all provider refresh functions (preserves public API for all consumers)
 export {
-  refreshXaiToken,
-  refreshGrokCliToken,
   refreshAccessToken,
   refreshKimiToken,
   refreshClineToken,
@@ -40,6 +39,8 @@ export {
   refreshTraeToken,
   refreshZedToken,
   refreshWindsurfToken,
+  refreshMiniMaxCodeToken,
+  refreshNousToken,
   classifyOAuthRefreshError,
 };
 
@@ -144,10 +145,9 @@ const REFRESH_HANDLERS = {
   github: (c, log) => refreshGitHubToken(c.refreshToken, log),
   kiro: (c, log) => refreshKiroToken(c.refreshToken, c.providerSpecificData, log),
   xai: (c, log) => refreshXaiToken(c.refreshToken, log),
-  // Grok CLI shares xAI OAuth client + token endpoint but needs the wider
-  // device-code scope + referrer in the refresh body (else invalid_grant)
-  "grok-cli": (c, log) => refreshGrokCliToken(c.refreshToken, log),
-  gcli: (c, log) => refreshGrokCliToken(c.refreshToken, log),
+  // Grok CLI shares xAI OAuth client + token endpoint (device-code tokens refresh the same way)
+  "grok-cli": (c, log) => refreshXaiToken(c.refreshToken, log),
+  gcli: (c, log) => refreshXaiToken(c.refreshToken, log),
   "codebuddy-cn": (c, log) => refreshCodebuddyToken(c.refreshToken, log),
   "codebuddy-intl": (c, log) => refreshCodebuddyIntlToken(c.refreshToken, log),
   trae: (c, log) => refreshTraeToken(c.refreshToken, c, log),
@@ -159,6 +159,11 @@ const REFRESH_HANDLERS = {
   // Kimi Code OAuth (merged into id `kimi`); legacy id still routes here
   kimi: (c, log) => refreshKimiToken(c.refreshToken, c, log),
   "kimi-coding": (c, log) => refreshKimiToken(c.refreshToken, c, log),
+  // MiniMax Code — single-use refresh tokens; the handler dedupes by token
+  // value and classifies invalid_grant (docs/minimax-code-proxy-plan.md §2.3)
+  "minimax-code": (c, log) => refreshMiniMaxCodeToken("minimax-code", c.refreshToken, log),
+  "minimax-code-global": (c, log) => refreshMiniMaxCodeToken("minimax-code-global", c.refreshToken, log),
+  nous: (c, log) => refreshNousToken(c.refreshToken, log),
   vertex: vertexRefreshHandler,
   "vertex-partner": vertexRefreshHandler
 };

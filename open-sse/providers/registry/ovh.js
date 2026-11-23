@@ -1,0 +1,40 @@
+export default {
+  id: "ovh",
+  priority: 156,
+  alias: "ovh",
+  aliases: ["kepler", "ovh-kepler", "kepler-ai"],
+  uiAlias: "ovh",
+  category: "free",
+  hasFree: true,
+  noAuth: true,
+  display: {
+    name: "OVH Cloud (Kepler AI Keyless)",
+    icon: "cloud",
+    color: "#0052D4",
+    textIcon: "OVH",
+    website: "https://endpoints.kepler.ai.cloud.ovh.net",
+    notice: {
+      apiKeyUrl: "https://endpoints.kepler.ai.cloud.ovh.net",
+    },
+  },
+  authType: "none",
+  authModes: ["none"],
+  transport: {
+    baseUrl: "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions",
+    format: "openai",
+    headers: {
+      "Authorization": "",
+    },
+  },
+  models: [
+    { id: "Qwen3.6-27B", name: "Qwen3.6 27B (262K)", contextLength: 262144 },
+    { id: "Qwen3.8-27B", name: "Qwen3.8 27B (262K)", contextLength: 262144 },
+    { id: "Qwen3.5-397B-A17B", name: "Qwen3.5 397B A17B (262K)", contextLength: 262144 },
+    { id: "gpt-oss-120b", name: "GPT-OSS 120B (131K)", contextLength: 131072 },
+    { id: "gpt-oss-20b", name: "GPT-OSS 20B (131K)", contextLength: 131072 },
+    { id: "Mistral-Small-3.2-24B-Instruct-2506", name: "Mistral Small 3.2 24B (131K)", contextLength: 131072 },
+    { id: "Meta-Llama-3_3-70B-Instruct", name: "Llama 3.3 70B (131K)", contextLength: 131072 },
+    { id: "Qwen2.5-VL-72B-Instruct", name: "Qwen2.5 VL 72B (Vision)", contextLength: 32768 },
+  ],
+  passthroughModels: true,
+};

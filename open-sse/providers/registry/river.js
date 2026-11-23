@@ -1,0 +1,46 @@
+export default {
+  id: "river",
+  priority: 60,
+  alias: "river",
+  aliases: [
+    "river-ai",
+  ],
+  uiAlias: "river",
+  display: {
+    name: "River",
+    icon: "water",
+    color: "#0284C7",
+    textIcon: "RV",
+    website: "https://river.ai",
+    notice: {
+      apiKeyUrl: "https://console.river.ai/keys",
+    },
+  },
+  category: "apikey",
+  authType: "apikey",
+  transport: {
+    baseUrl: "https://api.river.ai/v1/chat/completions",
+    validateUrl: "https://api.river.ai/v1/models",
+    modelsFetcher: {
+      url: "https://api.river.ai/v1/models",
+      type: "openai",
+    },
+  },
+  models: [
+    { id: "deepseek-ai/DeepSeek-V4.1-Flash", name: "DeepSeek V4.1 Flash" },
+    { id: "zai-org/GLM-5.3-Flash", name: "GLM 5.3 Flash" },
+    { id: "deepseek-ai/DeepSeek-V4-Flash-0731", name: "DeepSeek V4 Flash 0731" },
+    { id: "nvidia/GLM-5.2-NVFP4", name: "GLM 5.2 NVFP4" },
+    { id: "nvidia/GLM-5.2-NVFP4-262K", name: "GLM 5.2 NVFP4 262K" },
+    { id: "nvidia/Kimi-K2.6-NVFP4", name: "Kimi K2.6 NVFP4" },
+    { id: "nvidia/Kimi-K2.6-NVFP4-262K", name: "Kimi K2.6 NVFP4 262K" },
+    { id: "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4", name: "Nemotron 3.5 Lightning 30B" },
+    { id: "Qwen/Qwen3.5-9B", name: "Qwen 3.5 9B" },
+    { id: "Qwen/Qwen3.5-122B-A10B-FP8", name: "Qwen 3.5 122B A10B" },
+    { id: "Qwen/Qwen3.5-397B-A17B-FP8", name: "Qwen 3.5 397B A17B" },
+    { id: "Qwen/Qwen3.6-35B-A3B-FP8", name: "Qwen 3.6 35B A3B" },
+    { id: "Qwen/Qwen3.8-27B-FP8", name: "Qwen 3.8 27B" },
+    { id: "XiaomiMiMo/MiMo-V2.6-Flash-RL", name: "MiMo V2.6 Flash RL" },
+    { id: "XiaomiMiMo/MiMo-V2.6-Pro-RL", name: "MiMo V2.6 Pro RL" },
+  ],
+};

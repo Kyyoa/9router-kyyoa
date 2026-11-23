@@ -27,7 +27,10 @@ export function normalizeModel(raw) {
 
 // Resolve model kind with default (accepts legacy `type` field)
 export function modelKind(model) {
-  return model?.kind || model?.type || MODEL_DEFAULTS.kind;
+ return model?.kind || model?.type || MODEL_DEFAULTS.kind;
+}
+export function modelParams(model) {
+ return Array.isArray(model?.params) ? model.params : [];
 }
 export function modelQuotaFamily(model) {
   return model?.quotaFamily || MODEL_DEFAULTS.quotaFamily;

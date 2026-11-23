@@ -50,7 +50,7 @@ export function parseSuffix(model) {
 export function extractThinking(body) {
   if (!body || typeof body !== "object") return null;
 
-  // Claude output_config.effort (explicit) - priority over adaptive thinking
+  // Claude output_config.effort (explicit) — priority over adaptive thinking
   const oc = body.output_config?.effort;
   if (typeof oc === "string" && oc) {
     const e = oc.toLowerCase();
@@ -59,7 +59,7 @@ export function extractThinking(body) {
     return { mode: "level", level: e };
   }
 
-  // OpenAI chat / Responses shape - check effort first (zai sends both thinking object and reasoning.effort)
+  // OpenAI chat / Responses shape — check effort first (zai sends both thinking object and reasoning.effort)
   const effort = body.reasoning_effort ?? (typeof body.reasoning === "object" ? body.reasoning?.effort : null);
   if (typeof effort === "string" && effort) {
     const e = effort.toLowerCase();
@@ -125,7 +125,11 @@ function openAIThinkingDisplay(body) {
   return undefined;
 }
 
-const NATIVE_ONLY_FORMATS = new Set(["gemini-level", "gemini-budget", "claude-budget", "claude-adaptive", "zai-anthropic", "kiro"]);
+const NATIVE_ONLY_FORMATS = new Set(["gemini-level", "gemini-budget", "claude-budget", "claude-adaptive", "kiro"]);
+
+// Self-hosted gateways (vLLM/SGLang) validate thinking.budget_tokens; first-party
+// DeepSeek ignores it. Only dynamic compat nodes opt into the passthrough.
+const isOpenAICompatibleNode = (provider) => String(provider || "").startsWith("openai-compatible-");
 
 function resolveFormat(targetFormat, model, provider) {
   if (targetFormat === "commandcode") return "commandcode";
@@ -176,30 +180,13 @@ function normalizeOpenAILevel(level, supportedLevels) {
   return "xhigh";
 }
 
-const EFFORT_ORDER = ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"];
-
-export function mapEffortToSupportedLevel(level, supportedLevels) {
-  const levels = Array.isArray(supportedLevels) ? supportedLevels.filter(Boolean) : [];
-  if (!levels.length) return level && level !== "auto" ? level : "high";
-  if (!level || level === "auto") return levels.includes("high") ? "high" : levels[levels.length - 1];
-  if (levels.includes(level)) return level;
-  const target = EFFORT_ORDER.indexOf(level);
-  if (target < 0) return levels.includes("high") ? "high" : null;
-
-  let up = null;
-  let down = null;
-  for (const candidate of levels) {
-    const index = EFFORT_ORDER.indexOf(candidate);
-    if (index < 0) continue;
-    if (index > target && (up === null || index < EFFORT_ORDER.indexOf(up))) up = candidate;
-    if (index < target && (down === null || index > EFFORT_ORDER.indexOf(down))) down = candidate;
-  }
-  return up ?? down ?? null;
-}
-
-function toGeminiThinkingLevel(cfg) {
+function toGeminiThinkingLevel(cfg, supportedLevels) {
   const raw = cfg.mode === "auto" ? "high" : (toLevel(cfg) || "high");
-  return effortToThinkingLevel(raw);
+  const level = raw === "ultra" ? "max" : raw;
+  // Models that serve "xhigh" natively (Gemini 4 Hydrogen) keep it, and max caps there
+  // instead of collapsing to "high" like the rest of the gemini-level family.
+  if ((level === "xhigh" || level === "max") && supportedLevels?.includes("xhigh")) return "xhigh";
+  return effortToThinkingLevel(level);
 }
 
 function toKimiReasoningEffort(cfg) {
@@ -216,6 +203,7 @@ const GEMINI_LEVEL_OUTPUT_FLOOR = {
   low: 8192,
   medium: 16384,
   high: 65535,
+  xhigh: 65535,
 };
 
 function geminiBudgetOutputFloor(budget) {
@@ -232,7 +220,7 @@ function geminiLevelOutputFloor(level) {
 }
 
 // Gemini nests thinkingConfig under generationConfig. gemini-cli / antigravity wrap
-// the whole request in a { request: { generationConfig } } envelope - target the
+// the whole request in a { request: { generationConfig } } envelope — target the
 // envelope's generationConfig when present, else the top-level one.
 function getGeminiGenerationConfig(body) {
   if (body.request && typeof body.request === "object") {
@@ -280,7 +268,7 @@ function stripAll(body) {
 }
 
 // Apply unified thinking config to body in the resolved provider-native format.
-function applyFormat(fmt, body, cfg, caps, supportedLevels, display, model = "") {
+function applyFormat(fmt, body, cfg, caps, supportedLevels, display, model = "", budgetPassthrough = false) {
   const none = cfg.mode === "none";
   const canDisable = caps.thinkingCanDisable !== false;
   // Model cannot disable thinking → clamp "none" to minimal effort instead.
@@ -334,10 +322,14 @@ function applyFormat(fmt, body, cfg, caps, supportedLevels, display, model = "")
       break;
     }
     case "gemini-level": {
-      let level = none ? "minimal" : toGeminiThinkingLevel(eff);
+      let level = none ? "minimal" : toGeminiThinkingLevel(eff, supportedLevels);
       // Models without a "minimal" tier (Gemini 4) reject it with 400 — clamp to the lowest supported level.
       const lowest = supportedLevels?.find((l) => l !== "none");
-      if (supportedLevels?.length && lowest && !supportedLevels.includes(level)) level = lowest;
+      // "xhigh" on a model that does not advertise it (e.g. Carbon/Argon)
+      // downgrades one step to "high", never all the way to the floor.
+      if (supportedLevels?.length && lowest && !supportedLevels.includes(level)) {
+        level = level === "xhigh" && supportedLevels.includes("high") ? "high" : lowest;
+      }
       setGeminiThinking(body, { thinkingLevel: level, includeThoughts: level !== "minimal" });
       ensureGeminiOutputFloor(body, geminiLevelOutputFloor(level), caps);
       break;
@@ -353,7 +345,7 @@ function applyFormat(fmt, body, cfg, caps, supportedLevels, display, model = "")
       // Z.ai ignores thinking.disabled → must use enable_thinking:false to turn off.
       if (none && canDisable) { body.enable_thinking = false; delete body.thinking; break; }
       body.thinking = { type: "enabled" };
-      // reasoning_effort is only read by z.ai from GLM-5.2 onward - older GLM ignores it
+      // reasoning_effort is only read by z.ai from GLM-5.2 onward — older GLM ignores it
       // (see thinkingEffortSupported in capabilities.js). Skip on unsupported models so we
       // don't send a field the API doesn't recognize.
       if (caps.thinkingEffortSupported) {
@@ -367,19 +359,6 @@ function applyFormat(fmt, body, cfg, caps, supportedLevels, display, model = "")
       }
       break;
     }
-        case "zai-anthropic": {
-      const level = toLevel(eff);
-      if (canDisable && (none || level === "none" || level === "minimal")) {
-        body.thinking = { type: "disabled" };
-        delete body.output_config;
-        break;
-      }
-      body.thinking = { type: "enabled" };
-      const mapped = mapEffortToSupportedLevel(level, supportedLevels);
-      if (mapped) body.output_config = { effort: mapped };
-      else delete body.output_config;
-      break;
-    }
     case "qwen": {
       if (none && canDisable) { body.enable_thinking = false; break; }
       body.enable_thinking = true;
@@ -389,12 +368,21 @@ function applyFormat(fmt, body, cfg, caps, supportedLevels, display, model = "")
     }
     case "deepseek": {
       if (none && canDisable) { body.thinking = { type: "disabled" }; break; }
-      body.thinking = { type: "enabled" };
-      // DeepSeek: low/medium→high, xhigh/max→max. Some backends (mimo v2.5-pro/v2.6
-      // on opencode-go, probed live) 400 on "max" - clamp to high when the declared
-      // levels exclude it.
+      // Keep an explicit budget captured before translation/stripAll; strict
+      // DeepSeek-compatible hosts validate it when thinking is enabled.
+      body.thinking = budgetPassthrough && cfg.mode === "budget" && Number.isFinite(cfg.budget) && cfg.budget > 0
+        ? { type: "enabled", budget_tokens: cfg.budget }
+        : { type: "enabled" };
+      // DeepSeek's own API collapses low/medium→high and xhigh/max→max, so the wire
+      // stays on {high,max} for it. The declared levels win where they disagree:
+      // zen's free deepseek-v4.1-flash publishes low|high|max and its upstream takes
+      // the level verbatim, so collapsing "low" would make that level unreachable.
+      // Some backends (mimo v2.5-pro/v2.6 on opencode-go, probed live) 400 on "max"
+      // — clamp to high when the declared levels exclude it.
       const level = toLevel(eff);
-      const want = level === "xhigh" || level === "max" ? "max" : "high";
+      const want = level === "xhigh" || level === "max" ? "max"
+        : (level === "low" || level === "minimal") && supportedLevels?.includes("low") ? "low"
+        : "high";
       body.reasoning_effort = want === "max" && supportedLevels && !supportedLevels.includes("max") ? "high" : want;
       break;
     }
@@ -434,7 +422,7 @@ function applyFormat(fmt, body, cfg, caps, supportedLevels, display, model = "")
       break;
     }
     case "tokenrouter": {
-      // TokenRouter's reasoning_effort enum is low/medium/high/xhigh/max - it rejects
+      // TokenRouter's reasoning_effort enum is low/medium/high/xhigh/max — it rejects
       // "none"/"auto" with a 400 and supports "max" natively (no clamp like openai).
       // "none" → omit the field so the upstream default applies; pass levels through.
       if (none || eff.mode === "auto") break;
@@ -452,8 +440,14 @@ function applyFormat(fmt, body, cfg, caps, supportedLevels, display, model = "")
         delete body.params.reasoning_effort;
         break;
       }
-      const level = toLevel(eff);
-      if (level) body.params.reasoning_effort = level;
+      const rawLevel = toLevel(eff);
+      const level = rawLevel === "auto" ? "high"
+        : rawLevel === "minimal" ? "low"
+        : rawLevel;
+      const validLevels = ["off", "low", "medium", "high", "xhigh", "max"];
+      if (level && validLevels.includes(level)) {
+        body.params.reasoning_effort = level;
+      }
       break;
     }
     default:
@@ -486,6 +480,6 @@ export function applyThinking(targetFormat, model, body, provider = null, intent
   // An OpenAI-shaped client's ask arrives via the captured intent instead.
   const display = typeof body.thinking?.display === "string" ? body.thinking.display : intent?.display;
   stripAll(body);
-  applyFormat(fmt, body, cfg, caps, supportedLevels, display, cleanModel);
+  applyFormat(fmt, body, cfg, caps, supportedLevels, display, cleanModel, isOpenAICompatibleNode(provider));
   return body;
 }

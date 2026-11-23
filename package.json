@@ -1,6 +1,6 @@
 {
   "name": "9router-botkeep",
-  "version": "0.6.3",
+  "version": "0.6.4",
   "private": true,
   "description": "9router standalone build packaged for Botkeep",
   "scripts": {

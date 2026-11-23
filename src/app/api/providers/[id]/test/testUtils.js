@@ -203,11 +203,7 @@ function parseProviderErrorMessage(bodyText, fallback) {
 
 async function probeCloudCodeAssistAccess(connection, accessToken, effectiveProxy = null) {
   const userAgent = connection.provider === "antigravity"
-<<<<<<< HEAD
-    ? "google-api-nodejs-client/9.15.1 vscode-antigravity/1.107.0"
-=======
     ? (ANTIGRAVITY_CONFIG.loadCodeAssistUserAgent || ANTIGRAVITY_IDE_USER_AGENT)
->>>>>>> 6b8b7ceb (fix(antigravity): align the client identity with the live IDE and keep the UA shape)
     : "google-api-nodejs-client/9.15.1 gemini-cli/0.34.0";
 
   const res = await fetchWithConnectionProxy(CLOUD_CODE_ASSIST_TEST_URL, {
